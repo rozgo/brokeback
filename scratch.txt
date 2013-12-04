@@ -1,0 +1,8 @@
+Host erl0
+    User ec2-user
+    HostName ec2-54-193-14-144.us-west-1.compute.amazonaws.com
+    IdentityFile ~/.ssh/rozgo-beyond.pem
+    KeepAlive yes
+    ServerAliveInterval 60
+
+
