@@ -1,11 +1,16 @@
--module(chat).
+-module(chat_app).
+-behaviour(application).
 
--export([start/0]).
--export([handle_init/0]).
+-export([start/2]).
+-export([stop/1]).
 
-start() ->
+start(_Type, _Args) ->
     Handle = spawn(chat, handle_init, []),
     register(chat, Handle).
+    chat_sup:start_link().
+
+stop(_State) ->
+    ok.
 
 handle_init() ->
     ets:new(chans, [named_table]),
