@@ -1,5 +1,9 @@
 relx
 
+_rel/
+deps/
+ebin/
+
 # Compiled source #
 ###################
 *.beam
