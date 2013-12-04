@@ -1,5 +1,5 @@
 ## Name of the node
--name chat
+-name chat@50.18.216.202
 
 ## Cookie for distributed erlang
 -setcookie WGFTEMXXLYZDLLDPUZH
