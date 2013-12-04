@@ -10,6 +10,7 @@ start(Chan) ->
 handle(Chan, Whos, Msgs) ->
 	receive
 		{pub, {who, _}, {msg, Msg}} ->
+			io:format("MSG:~p~n",[Msg]),
 			ets:insert(Msgs, {now(), Msg}),
 			broadcast(Whos, Msg, ets:first(Whos)),
 			handle(Chan, Whos, Msgs);

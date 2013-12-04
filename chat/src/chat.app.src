@@ -1,7 +1,7 @@
 {application, chat, [
     {description, "Hello world with Chat!"},
     {vsn, "0.1.0"},
-    {modules, [mochijson2,chan]},
+    {modules, []},
     {registered, [chat_sup]},
     {applications, [
         kernel,
