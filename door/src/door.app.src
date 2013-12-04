@@ -1,0 +1,16 @@
+{application, door, [
+    {description, "Hello world with Cowboy!"},
+    {vsn, "0.1.0"},
+    {modules, []},
+    {registered, [door_sup]},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        ranch,
+        cowlib,
+        cowboy
+    ]},
+    {mod, {door_app, []}},
+    {env, []}
+]}.
