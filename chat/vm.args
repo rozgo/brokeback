@@ -1,5 +1,5 @@
 ## Name of the node
--name chat@50.18.216.202
+-name chat@ec2-50-18-216-202.us-west-1.compute.amazonaws.com
 
 ## Cookie for distributed erlang
 -setcookie WGFTEMXXLYZDLLDPUZH

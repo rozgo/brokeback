@@ -14,7 +14,7 @@ websocket_init(_TransportName, Req, _Opts) ->
     {ok, Req, undefined_state}.
 
 websocket_handle({text, Msg}, Req, State) ->
-    {chat, 'chat@50.18.216.202'} ! {{pid, self()}, {text, Msg}},
+    {chat, 'chat@ec2-50-18-216-202.us-west-1.compute.amazonaws.com'} ! {{pid, self()}, {text, Msg}},
     % {chat, 'chat@rozgo-powbook.local'} ! {{pid, self()}, {text, Msg}},
     {ok, Req, State};
 websocket_handle(_Data, Req, State) ->
