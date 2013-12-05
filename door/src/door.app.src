@@ -9,7 +9,8 @@
         crypto,
         ranch,
         cowlib,
-        cowboy
+        cowboy,
+        inets
     ]},
     {mod, {door_app, []}},
     {env, []}
