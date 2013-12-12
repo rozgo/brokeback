@@ -28,3 +28,10 @@ http://dl.dropboxusercontent.com/u/10592653/WebUI/index.html?chan=port2
               [{<<"connection">>,[<<"keep-alive">>]}],
               undefined,[],waiting,undefined,<<>>,false,waiting,[],<<>>,
               undefined}
+
+
+aws s3api get-object --bucket beyondgames-hub --key tags/016a46897e52d499054dedd2652f610109f9155a/msgs/m512555913650.json ./f.json
+
+aws s3api get-object --bucket beyondgames-hub --key tags/016a46897e52d499054dedd2652f610109f9155a/msgs/m512555913650.json ./f.json
+
+aws s3 ls s3://beyondgames-bow/Users/Data/cKU7apsQXb/BattleLogs/

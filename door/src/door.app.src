@@ -10,7 +10,8 @@
         ranch,
         cowlib,
         cowboy,
-        inets
+        inets,
+        ssl
     ]},
     {mod, {door_app, []}},
     {env, []}

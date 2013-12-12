@@ -14,8 +14,8 @@ websocket_init(_TransportName, Req, _Opts) ->
     {ok, Req, undefined_state}.
 
 websocket_handle({text, Msg}, Req, State) ->
-    {chat, 'chat@ec2-50-18-216-202.us-west-1.compute.amazonaws.com'} ! {{pid, self()}, {text, Msg}},
-    % {chat, 'chat@rozgo-powbook.local'} ! {{pid, self()}, {text, Msg}},
+    Parsed = mochijson2:decode(Msg),
+    command({msg, Msg}, Parsed),
     {ok, Req, State};
 websocket_handle(_Data, Req, State) ->
     {ok, Req, State}.
@@ -30,3 +30,21 @@ websocket_info(_Info, Req, State) ->
 websocket_terminate(_Reason, _Req, _State) ->
     ok.
     
+command({msg, Msg},
+    {struct,[{<<"cmd">>,<<"pub">>},{<<"chan">>,Chan},{<<"who">>,Who},_]}) ->
+    chan_pid(Chan) ! {pub, {who, Who}, {msg, Msg}};
+command({msg, _},
+    {struct,[{<<"cmd">>,<<"join">>},{<<"chan">>,Chan},{<<"who">>,Who}]}) ->
+    chan_pid(Chan) ! {join, {who, Who}, {pid, self()}};
+command({msg, _},
+    {struct,[{<<"cmd">>,<<"leave">>},{<<"chan">>,Chan},{<<"who">>,Who}]}) ->
+    chan_pid(Chan) ! {leave, {who, Who}}.
+
+chan_pid(Chan) ->
+    case global:whereis_name({chan,Chan}) of
+        undefined ->
+            NewPid = spawn(chan, start, [Chan]),
+            global:register_name({chan,Chan}, NewPid),
+            NewPid;
+        Pid -> Pid
+    end.
