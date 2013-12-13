@@ -11,6 +11,7 @@ init({tcp, http}, _Req, _Opts) ->
     {upgrade, protocol, cowboy_websocket}.
 
 websocket_init(_TransportName, Req, _Opts) ->
+    io:format("websocket_init: ~s~n",[_TransportName]),
     {ok, Req, undefined_state}.
 
 websocket_handle({text, Msg}, Req, State) ->
@@ -28,6 +29,7 @@ websocket_info(_Info, Req, State) ->
     {ok, Req, State}.
 
 websocket_terminate(_Reason, _Req, _State) ->
+    io:format("websocket_terminate: ~s~n",[_Reason]),
     ok.
     
 command({msg, Msg},
@@ -43,6 +45,7 @@ command({msg, _},
 chan_pid(Chan) ->
     case global:whereis_name({chan,Chan}) of
         undefined ->
+            io:format("spawn channel: ~s~n",[Chan]),
             NewPid = spawn(chan, start, [Chan]),
             global:register_name({chan,Chan}, NewPid),
             NewPid;

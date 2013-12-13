@@ -10,16 +10,18 @@ start(Chan) ->
 handle(Chan, Whos, Msgs) ->
     receive
         {pub, {who, _}, {msg, Msg}} ->
-            io:format("MSG:~p~n",[Msg]),
+            io:format("pub: ~s~n",[Msg]),
             ets:insert(Msgs, {now(), Msg}),
             broadcast(Whos, Msg, ets:first(Whos)),
             handle(Chan, Whos, Msgs);
         {join, {who, Who}, {pid, Where}} ->
+            io:format("join: ~s~n",[Who]),
             ets:insert(Whos, {Who, Where}),
             History = history(Msgs, ets:last(Msgs), 0, []),
             push(Where, History),
             handle(Chan, Whos, Msgs);
         {leave, {who, _}} ->
+            io:format("leave~n",[]),
             handle(Chan, Whos, Msgs)
     end.
 
