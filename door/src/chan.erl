@@ -15,6 +15,7 @@ handle(Chan, Whos, Msgs) ->
             broadcast(Whos, Msg, ets:first(Whos)),
             handle(Chan, Whos, Msgs);
         {join, {who, Who}, {pid, Where}} ->
+            boot_prev(Whos,{who, Who}),
             io:format("join: ~s~n",[Who]),
             ets:insert(Whos, {Who, Where}),
             History = history(Msgs, ets:last(Msgs), 0, []),
@@ -46,3 +47,12 @@ push(_, []) ->
 push(Where, [Msg|Msgs]) ->
     Where ! {push, Msg},
     push(Where, Msgs).
+
+boot_prev(Whos, {who, Who}) ->
+    case ets:lookup(Whos, Who) of
+        [{_,Pid}] ->
+            io:format("rejoin boot: ~s~n",[Who]),
+            exit(Pid,"rejoin boot");
+        _ -> ok
+    end.
+
