@@ -29,7 +29,7 @@ websocket_info(_Info, Req, State) ->
     {ok, Req, State}.
 
 websocket_terminate(_Reason, _Req, _State) ->
-    % io:format("websocket_terminate: ~s~n",[_Reason]),
+    io:format("websocket_terminate~n",[]),
     ok.
     
 command({msg, Msg},
