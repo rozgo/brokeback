@@ -12,7 +12,7 @@ start(_Type, _Args) ->
             {"/c", chat_handler, []}
         ]}
     ]),
-    {ok, _} = cowboy:start_http(http, 100, [{port, 8080}], [
+    {ok, _} = cowboy:start_http(http, 100, [{port, 80}], [
         {env, [{dispatch, Dispatch}]}
     ]),
     door_sup:start_link().
