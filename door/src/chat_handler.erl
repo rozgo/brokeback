@@ -43,11 +43,11 @@ command({msg, _},
     chan_pid(Chan) ! {leave, {who, Who}}.
 
 chan_pid(Chan) ->
-    case global:whereis_name({chan,Chan}) of
+    case global:whereis_name({chan, Chan}) of
         undefined ->
-            io:format("spawn channel: ~s~n",[Chan]),
+            io:format("spawn channel: ~s~n", [Chan]),
             NewPid = spawn(chan, start, [Chan]),
-            global:register_name({chan,Chan}, NewPid),
+            global:register_name({chan, Chan}, NewPid),
             NewPid;
         Pid -> Pid
     end.

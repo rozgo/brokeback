@@ -49,14 +49,9 @@ push(Where, [Msg|Msgs]) ->
     push(Where, Msgs).
 
 boot_prev(_, _, []) ->
-    io:format("no boot~n", []),
     ok;
 boot_prev(Chan, Where, [{Who, Pid}]) ->
     case Pid of
-        Where ->
-            io:format("no boot: ~s @ ~s ~p ~p~n", [Who, Chan, Where, Pid]);
-        _ ->
-            io:format("boot: ~s @ ~s ~p~n", [Who, Chan, Pid]),
-            Reason = lists:flatten(io_lib:format("boot: ~s @ ~s ~p~n", [Who, Chan, Pid])),
-            exit(Pid,Reason)
+        Where -> ok;
+        _ -> exit(Pid,lists:flatten(io_lib:format("boot: ~s @ ~s ~p~n", [Who, Chan, Pid])))
     end.
