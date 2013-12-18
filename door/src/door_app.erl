@@ -9,10 +9,11 @@ start(_Type, _Args) ->
         {'_', [
             {"/",  door_handler, []},
             {"/s", safe_handler, []},
-            {"/c", chat_handler, []}
+            {"/c", chat_handler, []},
+            {"/n", name_handler, []}
         ]}
     ]),
-    {ok, _} = cowboy:start_http(http, 100, [{port, 8080}], [
+    {ok, _} = cowboy:start_http(http, 100, [{port, 9000}], [
         {env, [{dispatch, Dispatch}]}
     ]),
     door_sup:start_link().
