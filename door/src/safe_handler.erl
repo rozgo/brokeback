@@ -23,7 +23,7 @@ terminate(_Reason, _Req, _State) ->
 command({struct,[{<<"method">>,<<"get">>},{<<"path">>,Path},{<<"objects">>,Objs}]}) ->
     get_objs(Path, Objs, []);
 command({struct,[{<<"method">>,<<"put">>},{<<"path">>,Path},{<<"objects">>,Objs}]}) ->
-    put_objs(Path, Objs).
+    put_objs(Path, Objs, []).
 
 get_objs(_, [], Classes) -> {200, Classes};
 get_objs(Path, [Obj|Objs], Classes) ->
@@ -36,10 +36,10 @@ get_objs(Path, [Obj|Objs], Classes) ->
             get_objs(Path, Objs, [Class|Classes])
     end.
 
-put_objs(_, []) -> {200, []};
-put_objs(Path, [Obj|Objs]) ->
+put_objs(_, [], NewIds) -> {200, NewIds};
+put_objs(Path, [Obj|Objs], NewIds) ->
     {struct,[{<<"class">>,Class},{<<"instances">>,PreSrcInsts}]} = Obj,
-    SrcInsts = make_insts(PreSrcInsts, []),
+    {SrcInsts, NewIds2} = make_insts(PreSrcInsts, [], NewIds),
     Key = util:str("~s/~s", [Path,Class]),
     {ok, Code, Data} = aws:s3_get(Key),
     case Code of
@@ -49,23 +49,23 @@ put_objs(Path, [Obj|Objs]) ->
             MergedInsts = set_insts(SrcInsts, DstInsts, []),
             Json = util:str("~s", [mochijson2:encode(MergedInsts)]),
             {ok, 200} = aws:s3_put(Key, Json),
-            put_objs(Path, Objs);
+            put_objs(Path, Objs, NewIds2);
         404 ->
             Json = util:str("~s", [mochijson2:encode(SrcInsts)]),
             {ok, 200} = aws:s3_put(Key, Json),
-            put_objs(Path, Objs)
+            put_objs(Path, Objs, NewIds2)
     end.
 
-make_insts([], IdInsts) -> IdInsts;
-make_insts([Inst|Insts], IdInsts) ->
+make_insts([], IdInsts, NewIds) -> {IdInsts, NewIds};
+make_insts([Inst|Insts], IdInsts, NewIds) ->
     {struct,Props} = Inst,
     ObjId = find_prop_value(Props, <<"objectId">>),
     case ObjId of
         not_found ->
-            NewObjId = util:gen_id(),
-            NewProps = [{<<"objectId">>, NewObjId}|Props],
-            make_insts(Insts,[{struct,NewProps}|IdInsts]);
-        _ -> make_insts(Insts,[Inst|IdInsts])
+            NewObjId = {<<"objectId">>, util:gen_id()},
+            NewProps = [NewObjId|Props],
+            make_insts(Insts, [{struct,NewProps}|IdInsts], [{struct,[NewObjId]}|NewIds]);
+        _ -> make_insts(Insts, [Inst|IdInsts], NewIds)
     end.
 
 set_insts([], [], MergedInsts) -> MergedInsts;

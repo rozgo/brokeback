@@ -10,7 +10,8 @@ start(_Type, _Args) ->
             {"/",  door_handler, []},
             {"/s", safe_handler, []},
             {"/c", chat_handler, []},
-            {"/n", name_handler, []}
+            {"/n", name_handler, []},
+            {"/i", info_handler, []}
         ]}
     ]),
     {ok, _} = cowboy:start_http(http, 100, [{port, 9000}], [
