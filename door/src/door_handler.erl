@@ -10,7 +10,7 @@ init(_Type, Req, []) ->
 handle(Req, State) ->
     {ok, Req2} = cowboy_req:reply(200, [
             {<<"content-type">>, <<"text/plain">>}
-        ], <<"Hello world 4!">>, Req),
+        ], <<"pong">>, Req),
     {ok, Req2, State}.
 
 terminate(_Reason, _Req, _State) ->
