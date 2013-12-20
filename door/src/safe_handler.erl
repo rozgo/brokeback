@@ -76,28 +76,25 @@ del_objs(Path, [Obj|Objs]) ->
 
 del_insts([], _, DstInsts) -> DstInsts;
 del_insts([Inst|Insts], SrcInsts, DstInsts) ->
-    DelInst = find_inst(Inst, SrcInsts),
-    case DelInst of
+    case find_inst(Inst, SrcInsts) of
         not_found -> del_insts(Insts, SrcInsts, [Inst|DstInsts]);
         _ -> del_insts(Insts, SrcInsts, DstInsts)
     end.
 
 make_insts([], IdInsts, NewIds) -> {IdInsts, NewIds};
 make_insts([Inst|Insts], IdInsts, NewIds) ->
-    ObjId = object_id(Inst),
-    case ObjId of
+    case object_id(Inst) of
         not_found ->
-            NewObjId = {<<"objectId">>, util:gen_id()},
+            ObjId = {<<"objectId">>, util:gen_id()},
             {struct,Props} = Inst,
-            NewProps = [NewObjId|Props],
-            make_insts(Insts, [{struct,NewProps}|IdInsts], [{struct,[NewObjId]}|NewIds]);
+            NewProps = [ObjId|Props],
+            make_insts(Insts, [{struct,NewProps}|IdInsts], [{struct,[ObjId]}|NewIds]);
         _ -> make_insts(Insts, [Inst|IdInsts], NewIds)
     end.
 
 set_insts([], [], MergedInsts) -> MergedInsts;
 set_insts([SrcInst|SrcInsts], [], MergedInsts) ->
-    Inst = find_inst(SrcInst, MergedInsts),
-    case Inst of
+    case find_inst(SrcInst, MergedInsts) of
         not_found -> set_insts(SrcInsts, [], [SrcInst|MergedInsts]);
         _ -> set_insts(SrcInsts, [], MergedInsts)
     end;
@@ -116,8 +113,7 @@ merge_inst(SrcInst, DstInst) ->
 merge_props([], [], MergedProps) -> MergedProps;
 merge_props([{Key,Value}|Props], [], MergedProps) ->
     case find_prop_value(MergedProps, Key) of
-        not_found ->
-            merge_props(Props, [], [{Key,Value}|MergedProps]);
+        not_found -> merge_props(Props, [], [{Key,Value}|MergedProps]);
         _ -> merge_props(Props, [], MergedProps)
     end;
 merge_props(Src, [{Key,Value}|Props], MergedProps) ->
@@ -134,9 +130,8 @@ object_id(Inst) ->
 
 find_inst_by_id(_, []) -> not_found;
 find_inst_by_id(ObjId, [Inst|Insts]) ->
-    OtherId = object_id(Inst),
-    case ObjId of
-        OtherId -> Inst;
+    case object_id(Inst) of
+        ObjId -> Inst;
         _ -> find_inst_by_id(ObjId, Insts)
     end.
 
