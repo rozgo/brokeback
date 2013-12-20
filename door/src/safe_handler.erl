@@ -24,7 +24,9 @@ terminate(_Reason, _Req, _State) ->
 command({struct,[{<<"method">>,<<"get">>},{<<"path">>,Path},{<<"objects">>,Objs}]}) ->
     get_objs(Path, Objs, []);
 command({struct,[{<<"method">>,<<"put">>},{<<"path">>,Path},{<<"objects">>,Objs}]}) ->
-    put_objs(Path, Objs, []).
+    put_objs(Path, Objs, []);
+command({struct,[{<<"method">>,<<"del">>},{<<"path">>,Path},{<<"objects">>,Objs}]}) ->
+    del_objs(Path, Objs).
 
 get_objs(_, [], Classes) -> {200, Classes};
 get_objs(Path, [Obj|Objs], Classes) ->
@@ -57,13 +59,36 @@ put_objs(Path, [Obj|Objs], NewIds) ->
             put_objs(Path, Objs, NewIds2)
     end.
 
+del_objs(_, []) -> {200, []};
+del_objs(Path, [Obj|Objs]) ->
+    {struct,[{<<"class">>,Class},{<<"instances">>,SrcInsts}]} = Obj,
+    Key = util:str("~s/~s", [Path,Class]),
+    {ok, Code, Data} = aws:s3_get(Key),
+    case Code of
+        200 ->
+            Insts = mochijson2:decode(Data),
+            MergedInsts = del_insts(Insts, SrcInsts, []),
+            Json = util:str("~s", [mochijson2:encode(MergedInsts)]),
+            {ok, 200} = aws:s3_put(Key, Json),
+            del_objs(Path, Objs);
+        404 -> del_objs(Path, Objs)
+    end.
+
+del_insts([], _, DstInsts) -> DstInsts;
+del_insts([Inst|Insts], SrcInsts, DstInsts) ->
+    DelInst = find_inst(Inst, SrcInsts),
+    case DelInst of
+        not_found -> del_insts(Insts, SrcInsts, [Inst|DstInsts]);
+        _ -> del_insts(Insts, SrcInsts, DstInsts)
+    end.
+
 make_insts([], IdInsts, NewIds) -> {IdInsts, NewIds};
 make_insts([Inst|Insts], IdInsts, NewIds) ->
-    {struct,Props} = Inst,
-    ObjId = find_prop_value(Props, <<"objectId">>),
+    ObjId = object_id(Inst),
     case ObjId of
         not_found ->
             NewObjId = {<<"objectId">>, util:gen_id()},
+            {struct,Props} = Inst,
             NewProps = [NewObjId|Props],
             make_insts(Insts, [{struct,NewProps}|IdInsts], [{struct,[NewObjId]}|NewIds]);
         _ -> make_insts(Insts, [Inst|IdInsts], NewIds)
@@ -71,9 +96,7 @@ make_insts([Inst|Insts], IdInsts, NewIds) ->
 
 set_insts([], [], MergedInsts) -> MergedInsts;
 set_insts([SrcInst|SrcInsts], [], MergedInsts) ->
-    {struct,Props} = SrcInst,
-    ObjId = find_prop_value(Props, <<"objectId">>),
-    Inst = find_inst_by_id(ObjId, MergedInsts),
+    Inst = find_inst(SrcInst, MergedInsts),
     case Inst of
         not_found -> set_insts(SrcInsts, [], [SrcInst|MergedInsts]);
         _ -> set_insts(SrcInsts, [], MergedInsts)
@@ -92,8 +115,7 @@ merge_inst(SrcInst, DstInst) ->
 
 merge_props([], [], MergedProps) -> MergedProps;
 merge_props([{Key,Value}|Props], [], MergedProps) ->
-    Found = find_prop_value(MergedProps, Key),
-    case Found of
+    case find_prop_value(MergedProps, Key) of
         not_found ->
             merge_props(Props, [], [{Key,Value}|MergedProps]);
         _ -> merge_props(Props, [], MergedProps)
@@ -103,14 +125,16 @@ merge_props(Src, [{Key,Value}|Props], MergedProps) ->
     merge_props(Src, Props, [Prop|MergedProps]).
 
 find_inst(Inst, Insts) ->
-    {struct,Props} = Inst,
-    ObjId = find_prop_value(Props, <<"objectId">>),
+    ObjId = object_id(Inst),
     find_inst_by_id(ObjId, Insts).
+
+object_id(Inst) ->
+    {struct,Props} = Inst,
+    find_prop_value(Props, <<"objectId">>).
 
 find_inst_by_id(_, []) -> not_found;
 find_inst_by_id(ObjId, [Inst|Insts]) ->
-    {struct,Props} = Inst,
-    OtherId = find_prop_value(Props, <<"objectId">>),
+    OtherId = object_id(Inst),
     case ObjId of
         OtherId -> Inst;
         _ -> find_inst_by_id(ObjId, Insts)
