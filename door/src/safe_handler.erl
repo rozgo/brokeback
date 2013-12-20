@@ -47,15 +47,10 @@ put_objs(Path, [Obj|Objs], NewIds) ->
     {ok, Code, Data} = aws:s3_get(Key),
     case Code of
         200 ->
-            Response = {Class,mochijson2:decode(Data)},
-            {_,DstInsts} = Response,
-            MergedInsts = set_insts(SrcInsts, DstInsts, []),
-            Json = util:str("~s", [mochijson2:encode(MergedInsts)]),
-            {ok, 200} = aws:s3_put(Key, Json),
+            save_obj(Key, set_insts(SrcInsts, mochijson2:decode(Data), [])),
             put_objs(Path, Objs, NewIds2);
         404 ->
-            Json = util:str("~s", [mochijson2:encode(SrcInsts)]),
-            {ok, 200} = aws:s3_put(Key, Json),
+            save_obj(Key, SrcInsts),
             put_objs(Path, Objs, NewIds2)
     end.
 
@@ -66,10 +61,7 @@ del_objs(Path, [Obj|Objs]) ->
     {ok, Code, Data} = aws:s3_get(Key),
     case Code of
         200 ->
-            Insts = mochijson2:decode(Data),
-            MergedInsts = del_insts(Insts, SrcInsts, []),
-            Json = util:str("~s", [mochijson2:encode(MergedInsts)]),
-            {ok, 200} = aws:s3_put(Key, Json),
+            save_obj(Key, del_insts(mochijson2:decode(Data), SrcInsts, [])),
             del_objs(Path, Objs);
         404 -> del_objs(Path, Objs)
     end.
@@ -80,6 +72,10 @@ del_insts([Inst|Insts], SrcInsts, DstInsts) ->
         not_found -> del_insts(Insts, SrcInsts, [Inst|DstInsts]);
         _ -> del_insts(Insts, SrcInsts, DstInsts)
     end.
+
+save_obj(Key, Insts) ->
+    Json = util:str("~s", [mochijson2:encode(Insts)]),
+    {ok, 200} = aws:s3_put(Key, Json).
 
 make_insts([], IdInsts, NewIds) -> {IdInsts, NewIds};
 make_insts([Inst|Insts], IdInsts, NewIds) ->
