@@ -23,12 +23,23 @@ terminate(_Reason, _Req, _State) ->
     ok.
 
 command({struct,[{<<"method">>,<<"put">>},{<<"lookup">>,Name},{<<"key">>,Key},{<<"score">>,Score}]}) ->
-    look_pid(Name) ! {put, {key, Key}, {score, Score}},
-    {200, []};
+    look_pid(Name) ! {put, {who, self()}, {key, Key}, {score, Score}},
+    receive
+        {lowhigh, LowHigh} -> {200, LowHigh}
+    after
+        5000 -> {408, []}
+    end;
 command({struct,[{<<"method">>,<<"get">>},{<<"lookup">>,Name},{<<"low">>,Low},{<<"high">>,High}]}) ->
     look_pid(Name) ! {get, {who, self()}, {low, Low}, {high, High}},
     receive
         {matches, Matches} -> {200, Matches}
+    after
+        5000 -> {408, []}
+    end;
+command({struct,[{<<"method">>,<<"get">>},{<<"lookup">>,Name}]}) ->
+    look_pid(Name) ! {get, {who, self()}},
+    receive
+        {lowhigh, LowHigh} -> {200, LowHigh}
     after
         5000 -> {408, []}
     end.
