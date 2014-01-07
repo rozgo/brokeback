@@ -12,6 +12,7 @@ start(_Type, _Args) ->
             {"/c", chat_handler, []},
             {"/n", name_handler, []},
             {"/l", look_handler, []},
+            {"/t", time_handler, []},
             {"/i", info_handler, []}
         ]}
     ]),
