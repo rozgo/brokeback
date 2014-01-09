@@ -9,7 +9,8 @@ get_objs(Path, [Obj|Objs], Classes) ->
     Key = util:str("~s/~s", [Path,Obj]),
     {ok, Code, Data} = aws:s3_get(Key),
     case Code of
-        404 -> {404, []};
+        404 ->
+            get_objs(Path, Objs, [{Obj,[]}|Classes]);
         200 ->
             Class = {Obj,mochijson2:decode(Data)},
             get_objs(Path, Objs, [Class|Classes])
