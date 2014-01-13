@@ -16,9 +16,11 @@ get_objs(Path, [Obj|Objs], Classes) ->
             get_objs(Path, Objs, [Class|Classes])
     end.
 
-put_objs(_, [], NewIds) -> {200, NewIds};
-put_objs(Path, [Obj|Objs], NewIds) ->
-    {struct,[{<<"class">>,Class},{<<"instances">>,PreSrcInsts}]} = Obj,
+put_objs(_, [], NewIds) -> {200, lists:reverse(NewIds)};
+put_objs(Path, [{struct,[{<<"instances">>,PreSrcInsts}]}|Objs], NewIds) ->
+    NewId = util:gen_id(),
+    put_objs(Path, [{struct,[{<<"class">>,NewId},{<<"instances">>,PreSrcInsts}]}|Objs], [{struct,[{<<"classId">>,NewId}]}|NewIds]);
+put_objs(Path, [{struct,[{<<"class">>,Class},{<<"instances">>,PreSrcInsts}]}|Objs], NewIds) ->
     {SrcInsts, NewIds2} = make_insts(PreSrcInsts, [], NewIds),
     Key = util:str("~s/~s", [Path,Class]),
     {ok, Code, Data} = aws:s3_get(Key),
