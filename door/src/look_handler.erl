@@ -29,8 +29,8 @@ command({struct,[{<<"method">>,<<"put">>},{<<"lookup">>,Name},{<<"key">>,Key},{<
     after
         5000 -> {408, []}
     end;
-command({struct,[{<<"method">>,<<"get">>},{<<"lookup">>,Name},{<<"low">>,Low},{<<"high">>,High}]}) ->
-    look_pid(Name) ! {get, {who, self()}, {low, Low}, {high, High}},
+command({struct,[{<<"method">>,<<"get">>},{<<"lookup">>,Name},{<<"low">>,Low},{<<"high">>,High},{<<"limit">>,Limit}]}) ->
+    look_pid(Name) ! {get, {who, self()}, {low, Low}, {high, High}, {limit, Limit}},
     receive
         {matches, Matches} -> {200, Matches}
     after
