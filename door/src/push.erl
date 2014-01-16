@@ -1,7 +1,7 @@
 -module(push).
 -export([sendpush/1]).
 
-sendpush(Msg) ->
+sendpush({struct,[{<<"method">>,<<"put">>},{<<"token">>,Token},{<<"msg">>,Msg}]}) -> ->
   io:format("boom"),
   PrivDir = code:priv_dir(door),
   %io:format("Priv Dir: ~s", [PrivDir]),
@@ -19,7 +19,8 @@ sendpush(Msg) ->
   BPayload = erlang:list_to_binary(Payload),
   PayloadLen = erlang:byte_size(BPayload),
 
-  Token = "9aefcf3355f33ac459e8baa65cc6192017cf7674483f7ce4b63ba8edcb5564f1",
+  %Token = "9aefcf3355f33ac459e8baa65cc6192017cf7674483f7ce4b63ba8edcb5564f1",
+  %Token = "3f01d3c889e3df2c2ca1b9d103f9a2ef277011b377cd827b521097f5820eba0b",
   BToken = util:hexstr_to_bin(Token),
   BTokenLength = erlang:byte_size(BToken),
 
@@ -37,4 +38,4 @@ sendpush(Msg) ->
               0
           end,
   ssl:close(Socket),
-  Value.
+  Value -> {Value, "push sent"}.
