@@ -3,6 +3,9 @@
 -export([str/2]).
 -export([gen_id/0]).
 -export([hash/1]).
+-export([bin_to_hexstr/1]).
+-export([hexstr_to_bin/1]).
+
 
 str(Format, Args) ->
     lists:flatten(io_lib:format(Format, Args)).
@@ -24,3 +27,15 @@ hash(Data) ->
     Sha = crypto:hash(sha, Data),
     B64 = binary:bin_to_list(base64:encode(Sha)),
     binary:list_to_bin(take_chars(B64, 10, [])).
+
+bin_to_hexstr(Bin) ->
+   lists:flatten([io_lib:format("~2.16.0B", [X]) ||
+                  X <- binary_to_list(Bin)]).
+
+hexstr_to_bin(S) ->
+   hexstr_to_bin(S, []).
+hexstr_to_bin([], Acc) ->
+   list_to_binary(lists:reverse(Acc));
+hexstr_to_bin([X,Y|T], Acc) ->
+   {ok, [V], []} = io_lib:fread("~16u", [X,Y]),
+   hexstr_to_bin(T, [V | Acc]).
