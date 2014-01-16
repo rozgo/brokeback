@@ -1,9 +1,9 @@
--module(push_handler).
+-module(push).
 -export([sendpush/1]).
 
 sendpush(Msg) ->
   io:format("boom"),
-  PrivDir = code:priv_dir(push_handler),
+  PrivDir = code:priv_dir(door),
   %io:format("Priv Dir: ~s", [PrivDir]),
   Address = "gateway.sandbox.push.apple.com",
   Port = 2195,
