@@ -13,7 +13,8 @@ start(_Type, _Args) ->
             {"/n", name_handler, []},
             {"/l", look_handler, []},
             {"/t", time_handler, []},
-            {"/i", info_handler, []}
+            {"/i", info_handler, []},
+            {"/p", push_handler, []}
         ]}
     ]),
     {ok, _} = cowboy:start_http(http, 100, [{port, 9000}], [

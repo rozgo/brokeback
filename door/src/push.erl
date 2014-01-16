@@ -1,7 +1,7 @@
 -module(push).
 -export([sendpush/1]).
 
-sendpush({struct,[{<<"method">>,<<"put">>},{<<"token">>,Token},{<<"msg">>,Msg}]}) -> ->
+sendpush({struct,[{<<"method">>,<<"put">>},{<<"token">>,Token},{<<"msg">>,Msg}]}) ->
   io:format("boom"),
   PrivDir = code:priv_dir(door),
   %io:format("Priv Dir: ~s", [PrivDir]),
@@ -38,4 +38,4 @@ sendpush({struct,[{<<"method">>,<<"put">>},{<<"token">>,Token},{<<"msg">>,Msg}]}
               0
           end,
   ssl:close(Socket),
-  Value -> {Value, "push sent"}.
+  {Value, "push sent"}.

@@ -12,7 +12,7 @@ handle(Req, State) ->
     % io:format("BODY: ~s~n", [Body]),
     Query = mochijson2:decode(Body),
     io:format("Query: ~p~n", [Query]),
-    {Code, Response} = push:sendpush(Query),
+    {Code, Response} = push_pid(Query),
     {ok, Req3} = cowboy_req:reply(Code,[
         {<<"Access-Control-Allow-Origin">>, <<"*">>},
         {<<"content-type">>, <<"application/json">>}],
@@ -21,3 +21,12 @@ handle(Req, State) ->
 
 terminate(_Reason, _Req, _State) ->
     ok.
+
+push_pid(Query) ->
+    case global:whereis_name({look, "push"}) of
+        undefined ->
+            NewPid = spawn(look, sendpush, [Query]),
+            global:register_name({look, "push"}, NewPid),
+            NewPid;
+        Pid -> Pid
+    end.
