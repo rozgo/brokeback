@@ -2,10 +2,13 @@
 -export([sendpush/1]).
 
 sendpush(Msg) ->
+  io:format("boom"),
+  PrivDir = code:priv_dir(push_handler),
+  %io:format("Priv Dir: ~s", [PrivDir]),
   Address = "gateway.sandbox.push.apple.com",
   Port = 2195,
-  Cert = "apns-dev-cert.pem",
-  Key = "apns-dev-key.noenc.pem",  
+  Cert = PrivDir ++ "/push/apns-dev-cert.pem",
+  Key = PrivDir ++ "/push/apns-dev-key.noenc.pem",  
 
   %Options = [{cacertfile, CaCert}, {certfile, Cert}, {keyfile, Key}, {mode, binary}],
   Options = [{certfile, Cert}, {keyfile, Key}, {mode, binary}],
