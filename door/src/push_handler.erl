@@ -31,12 +31,21 @@ createpush({struct,[{<<"method">>,<<"put">>},{<<"token">>,Token},{<<"msg">>,Msg}
   Payload = mochijson2:encode({struct, [{"aps", {struct, [{"alert", Msg}]}}]}),
   BPayload = erlang:list_to_binary(Payload),
   PayloadLen = erlang:byte_size(BPayload),
-  BToken = Token,%util:hexstr_to_bin(Token),
+  BToken = util:hexstr_to_bin(binary_to_list(Token)),
   BTokenLength = erlang:byte_size(BToken),
-  SomeID= 1,
   {MSeconds,Seconds,_} = erlang:now(),
   Expiry = MSeconds * 1000000 + Seconds + 3600*1,
-  Packet = <<1:8, SomeID:32/big, Expiry:32/big, BTokenLength:16/big, BToken/binary, PayloadLen:16/big, BPayload/binary>>,
+  
+  TokenItem = <<1:8, BTokenLength:16/big, BToken/binary>>,
+  PayloadItem = <<2:8, PayloadLen:16/big, BPayload/binary>>,
+  NotificationIDItem = <<3:8, 4:16/big, 1:32/big>>,
+  ExpiryItem = <<4:8, 4:16/big, Expiry>>,
+  PriorityItem = <<5:8, 1:16/big, 10:8>>,
+
+  FrameData = <<TokenItem/binary, PayloadItem/binary, NotificationIDItem/binary, ExpiryItem/binary, PriorityItem/binary>>,
+  FrameLength = erlang:byte_size(FrameData),
+  Packet = <<2:8, FrameLength:32/big, FrameData/binary>>,
+  %Packet = <<2:8, SomeID:32/big, Expiry:32/big, BTokenLength:16/big, BToken/binary, PayloadLen:16/big, BPayload/binary>>,
   Packet.
 
 sendpush(Packet) ->

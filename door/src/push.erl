@@ -23,14 +23,16 @@ handle(Socket) ->
       ssl:send(Socket, Packet),
       io:format("sent.~n"),
       Value = receive
-              {ssl,{sslsocket,new_ssl,_}, Data} -> Data
-              after 2000 -> timeout
-              end,
+        {ssl,{sslsocket,_,_}, Data} -> Data
+        after 20000 -> timeout
+      end,
 
       io:format("Client received: ~p~n",[Value]),
-      ResultMsg = if Value =/= timeout -> <<"success">>;
-                      Value =:= timeout -> <<"error">>
-                   end,
+
+      ResultMsg = if 
+        Value =:= timeout -> <<"success">>;
+        Value =/= timeout -> <<"error">>
+      end,
 
       PushResult = {200, [{"code",Value}, {"result",ResultMsg}]},
 
@@ -40,4 +42,3 @@ handle(Socket) ->
       handle(Socket)
 
   end.
-
