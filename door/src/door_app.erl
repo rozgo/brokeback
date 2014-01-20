@@ -19,11 +19,11 @@ start(_Type, _Args) ->
     ]),
     PrivDir = code:priv_dir(door),
     io:format("PrivDir: ~s~n",[PrivDir]),
-    {ok, _} = cowboy:start_https(https, 100, [
-        {port, 9000},
-        {cacertfile, PrivDir ++ "/ssl/cowboy-ca.crt"},
-        {certfile, PrivDir ++ "/ssl/server.crt"},
-        {keyfile, PrivDir ++ "/ssl/server.key"}
+    {ok, _} = cowboy:start_http(https, 100, [
+        {port, 9000}
+        % {cacertfile, PrivDir ++ "/ssl/cowboy-ca.crt"},
+        % {certfile, PrivDir ++ "/ssl/server.crt"},
+        % {keyfile, PrivDir ++ "/ssl/server.key"}
         ], [{env, [{dispatch, Dispatch}]}
     ]),
     door_sup:start_link().
