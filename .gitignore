@@ -4,6 +4,9 @@ _rel/
 deps/
 ebin/
 
+# Makefile downloaded
+.erlang.mk.packages.v1
+
 # Compiled source #
 ###################
 *.beam
