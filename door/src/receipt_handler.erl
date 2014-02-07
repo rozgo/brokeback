@@ -29,7 +29,8 @@ handle(Req, State) ->
 
     {ok, Req3} = cowboy_req:reply(Code, [
       { <<"Access-Control-Allow-Origin">>, <<"*">> },
-      { <<"content-type">>, <<"application/json">> }
+      { <<"content-type">>, <<"application/json">> },
+      { <<"X-Status-Code">>, binary:list_to_bin(io_lib:format("~p", [Code])) }
     ], Result, Req2),
     {ok, Req3, State}.
 
