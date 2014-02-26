@@ -15,6 +15,7 @@ start(_Type, _Args) ->
             {"/t", time_handler, []},
             {"/i", info_handler, []},
             {"/p", push_handler, []},
+            {"/e", echo_handler, []},
             {"/r", receipt_handler, []}
         ]}
     ]),
