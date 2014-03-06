@@ -18,17 +18,29 @@ iso_8601_basic_time() ->
 
 datetime() -> iso_8601_basic_time().
 
-bucket() -> "beyondgames-bow".
+bucket() -> 
+    {ok, Bucket} = application:get_env(door, s3_bucket),
+    Bucket.
 
-host() -> "https://s3-us-west-1.amazonaws.com".
+host() -> 
+    {ok, Host} = application:get_env(door, s3_host),
+    Host.
 
-accesskey() -> "AKIAJVOLEECLCMRC75QA".
+accesskey() -> 
+    {ok, AccessKey} = application:get_env(door, s3_accesskey),
+    AccessKey.
 
-secretkey() -> "fEnLJuEeyyZtZIIAAePdvAHO3qrPDHpy8fj231EI".
+secretkey() ->
+    {ok, SecretKey} = application:get_env(door, s3_secretkey),
+    SecretKey.
 
-s3_path() -> "http://s3-us-west-1.amazonaws.com/beyondgames-bow".
+s3_path() -> 
+    {ok, Path} = application:get_env(door, s3_path),
+    Path.
 
-s3_all_users() -> "uri=http://acs.amazonaws.com/groups/global/AllUsers".
+s3_all_users() -> 
+    {ok, Url} = application:get_env(door, s3_all_users),
+    Url.
 
 s3_get(Key) ->
     Path = util:str("~s/~s", [s3_path(),Key]),

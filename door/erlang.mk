@@ -1,4 +1,4 @@
-# Copyright (c) 2013, Loïc Hoguin <essen@ninenines.eu>
+# Copyright (c) 2013-2014, Loïc Hoguin <essen@ninenines.eu>
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -58,15 +58,16 @@ ifneq ($(wildcard $(RELX_CONFIG)),)
 RELX ?= $(CURDIR)/relx
 export RELX
 
-RELX_URL ?= https://github.com/erlware/relx/releases/download/0.4.0/relx
+RELX_URL ?= https://github.com/erlware/relx/releases/download/v0.6.0/relx
+RELX_OPTS ?=
 
 define get_relx
-	wget --no-check-certificate -O $(RELX) $(RELX_URL) || rm $(RELX)
+	wget -O $(RELX) $(RELX_URL) || rm $(RELX)
 	chmod +x $(RELX)
 endef
 
 rel: clean-rel all $(RELX)
-	@$(RELX)
+	@$(RELX) -c $(RELX_CONFIG) $(RELX_OPTS)
 
 $(RELX):
 	@$(call get_relx)
@@ -89,7 +90,13 @@ ALL_TEST_DEPS_DIRS = $(addprefix $(DEPS_DIR)/,$(TEST_DEPS))
 
 # Application.
 
-ERL_LIBS ?= $(DEPS_DIR)
+ifeq ($(filter $(DEPS_DIR),$(subst :, ,$(ERL_LIBS))),)
+ifeq ($(ERL_LIBS),)
+	ERL_LIBS = $(DEPS_DIR)
+else
+	ERL_LIBS := $(ERL_LIBS):$(DEPS_DIR)
+endif
+endif
 export ERL_LIBS
 
 ERLC_OPTS ?= -Werror +debug_info +warn_export_all +warn_export_vars \
@@ -106,7 +113,7 @@ app: ebin/$(PROJECT).app
 	$(eval MODULES := $(shell find ebin -type f -name \*.beam \
 		| sed 's/ebin\///;s/\.beam/,/' | sed '$$s/.$$//'))
 	$(appsrc_verbose) cat src/$(PROJECT).app.src \
-		| sed 's/{modules,\s*\[\]}/{modules, \[$(MODULES)\]}/' \
+		| sed 's/{modules,[[:space:]]*\[\]}/{modules, \[$(MODULES)\]}/' \
 		> ebin/$(PROJECT).app
 
 define compile_erl
@@ -125,7 +132,7 @@ define compile_dtl
 		Compile = fun(F) -> \
 			Module = list_to_atom( \
 				string:to_lower(filename:basename(F, ".dtl")) ++ "_dtl"), \
-			erlydtl_compiler:compile(F, Module, [{out_dir, "ebin/"}]) \
+			erlydtl:compile(F, Module, [{out_dir, "ebin/"}]) \
 		end, \
 		_ = [Compile(F) || F <- string:tokens("$(1)", " ")], \
 		init:stop()'
@@ -209,13 +216,14 @@ build-tests: build-test-deps
 	$(gen_verbose) erlc -v $(ERLC_OPTS) -o test/ \
 		$(wildcard test/*.erl test/*/*.erl) -pa ebin/
 
+CT_OPTS ?=
 CT_RUN = ct_run \
 	-no_auto_compile \
 	-noshell \
 	-pa $(realpath ebin) $(DEPS_DIR)/*/ebin \
 	-dir test \
-	-logdir logs
-#	-cover test/cover.spec
+	-logdir logs \
+	$(CT_OPTS)
 
 CT_SUITES ?=
 
@@ -243,16 +251,18 @@ tests: clean deps app build-tests
 
 # Dialyzer.
 
+DIALYZER_PLT ?= $(CURDIR)/.$(PROJECT).plt
+export DIALYZER_PLT
+
 PLT_APPS ?=
 DIALYZER_OPTS ?= -Werror_handling -Wrace_conditions \
 	-Wunmatched_returns # -Wunderspecs
 
 build-plt: deps app
-	@dialyzer --build_plt --output_plt .$(PROJECT).plt \
-		--apps erts kernel stdlib $(PLT_APPS) $(ALL_DEPS_DIRS)
+	@dialyzer --build_plt --apps erts kernel stdlib $(PLT_APPS) $(ALL_DEPS_DIRS)
 
 dialyze:
-	@dialyzer --src src --plt .$(PROJECT).plt --no_native $(DIALYZER_OPTS)
+	@dialyzer --src src --no_native $(DIALYZER_OPTS)
 
 # Packages.
 
