@@ -28,7 +28,18 @@ start(_Type, _Args) ->
         % {keyfile, PrivDir ++ "/ssl/server.key"}
         ], [{env, [{dispatch, Dispatch}]}
     ]),
-    door_sup:start_link().
+    Result = door_sup:start_link(),
+
+    % statistics collection for New Relic
+    statman_server:add_subscriber(statman_aggregator),
+    case application:get_env(newrelic, license_key) of
+        undefined ->
+            ok;
+        _ ->
+            newrelic_poller:start_link(fun newrelic_statman:poll/0)
+    end,
+
+    Result.
 
 stop(_State) ->
     ok.
