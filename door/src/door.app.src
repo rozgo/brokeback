@@ -3,7 +3,7 @@
     {vsn, "0.1.0"},
     {modules, []},
     {registered, [door_sup]},
-    {included_applications, [statman, newrelic]},
+    % {included_applications, [statman, newrelic]},
     {applications, [
         kernel,
         stdlib,
@@ -12,8 +12,8 @@
         cowlib,
         cowboy,
         inets,
-        lhttpc,
-        jiffy,
+        % lhttpc,
+        % jiffy,
         ssl
     ]},
     {mod, {door_app, []}},
