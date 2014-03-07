@@ -31,13 +31,13 @@ start(_Type, _Args) ->
     Result = door_sup:start_link(),
 
     % statistics collection for New Relic
-    % statman_server:add_subscriber(statman_aggregator),
-    % case application:get_env(newrelic, license_key) of
-    %     undefined ->
-    %         ok;
-    %     _ ->
-    %         newrelic_poller:start_link(fun newrelic_statman:poll/0)
-    % end,
+    statman_server:add_subscriber(statman_aggregator),
+    case application:get_env(newrelic, license_key) of
+        undefined ->
+            ok;
+        _ ->
+            newrelic_poller:start_link(fun newrelic_statman:poll/0)
+    end,
 
     Result.
 
