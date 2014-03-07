@@ -4,9 +4,12 @@
 -export([handle/2]).
 -export([terminate/3]).
 
+-compile([{parse_transform, decorators}]).
+
 init(_Type, Req, []) ->
     {ok, Req, undefined}.
 
+-decorate({statman_decorators, runtime, [{key, {<<"/n">>, total}}]}).
 handle(Req, State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
     Query = mochijson2:decode(Body),
@@ -15,6 +18,7 @@ handle(Req, State) ->
         {<<"Access-Control-Allow-Origin">>, <<"*">>},
         {<<"content-type">>, <<"application/json">>}],
     Result, Req2),
+
     {ok, Req3, State}.
 
 terminate(_Reason, _Req, _State) ->

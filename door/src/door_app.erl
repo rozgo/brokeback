@@ -21,13 +21,19 @@ start(_Type, _Args) ->
     ]),
     PrivDir = code:priv_dir(door),
     io:format("PrivDir: ~s~n",[PrivDir]),
-    {ok, _} = cowboy:start_http(https, 100, [
-        {port, 9000}
-        % {cacertfile, PrivDir ++ "/ssl/cowboy-ca.crt"},
-        % {certfile, PrivDir ++ "/ssl/server.crt"},
-        % {keyfile, PrivDir ++ "/ssl/server.key"}
-        ], [{env, [{dispatch, Dispatch}]}
-    ]),
+    {ok, _} = cowboy:start_http(https, 100,
+        [
+            {port, 9000}
+            % {cacertfile, PrivDir ++ "/ssl/cowboy-ca.crt"},
+            % {certfile, PrivDir ++ "/ssl/server.crt"},
+            % {keyfile, PrivDir ++ "/ssl/server.key"}
+        ],
+        [
+            {env, [{dispatch, Dispatch}]},
+            {onrequest, fun stats:handle_request/1},
+            {onrequest, fun stats:handle_response/4}
+        ]
+    ),
     Result = door_sup:start_link(),
 
     % statistics collection for New Relic
