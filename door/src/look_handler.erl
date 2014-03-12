@@ -4,12 +4,9 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--compile([{parse_transform, decorators}]).
-
 init(_Type, Req, []) ->
     {ok, Req, undefined}.
 
--decorate({statman_decorators, runtime, [{key, {<<"/l">>, total}}]}).
 handle(Req, State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
     % io:format("BODY: ~s~n", [Body]),

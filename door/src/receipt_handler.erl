@@ -4,8 +4,6 @@
 -export([handle/2]).
 -export([terminate/3]).
 
--compile([{parse_transform, decorators}]).
-
 apple_receipt_url() -> "https://buy.itunes.apple.com/verifyReceipt".
 apple_sandbox_receipt_url() -> "https://sandbox.itunes.apple.com/verifyReceipt".
 
@@ -23,7 +21,6 @@ receipt_status_codes() -> [
 init(_Type, Req, []) ->
     {ok, Req, undefined}.
 
--decorate({statman_decorators, runtime, [{key, {<<"/r">>, total}}]}).
 handle(Req, State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
     VerifyRes = send_receipt_request(mochijson2:decode(Body)),
