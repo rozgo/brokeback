@@ -44,7 +44,6 @@ s3_all_users() ->
 
 s3_get(Key) ->
     Path = util:str("~s/~s", [s3_path(),Key]),
-    % {Status,{{_,Code,_},_,Data}} = httpc:request(get, {Path, []}, [], []),
     {Status, {{Code, _}, _, Data}} = lhttpc:request(Path, get, [], infinity),
     {Status, Code, Data}.
 
@@ -64,11 +63,5 @@ s3_put(Key,Data) ->
         {"X-Amz-Grant-Read", s3_all_users()},
         {"Content-Type", "application/json"}
     ], Data, infinity),
-    % {Status,{{_,Code,_},_,_}} = httpc:request(put, {AWS_path, [
-    %     {"Authorization", AWS_authorization},
-    %     {"X-Amz-Date", AWS_Datetime},
-    %     {"X-Amz-Grant-Read", s3_all_users()},
-    %     {"Content-Type", "application/json"}
-    % ],"application/json", Data}, [{ssl,[{verify,0}]}], []),
     {Status, Code}.
 
