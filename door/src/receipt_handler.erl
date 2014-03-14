@@ -36,17 +36,13 @@ handle(Req, State) ->
     {ok, Req3, State}.
 
 create_receipt_request(Url, Json) ->
-    httpc:request(post, {
-      Url, [
+    lhttpc:request(Url, post, [
         {"Content-Type", "application/json"}
-      ],
-      "application/json",
-      Json}, [], []).
+    ], Json, infinity).
 
 get_receipt_status(Req) ->
-    {ok, ReqResult} = Req,
-    {_, _, Body} = ReqResult,
-
+    {ok, {_, _, Body}} = Req,
+    
     {struct, ReceiptResp} = mochijson2:decode(Body),
     {_, Status} = lists:keyfind(<<"status">>, 1, ReceiptResp),
     Status.

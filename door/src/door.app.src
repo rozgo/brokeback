@@ -12,7 +12,8 @@
         cowlib,
         cowboy,
         inets,
-        ssl
+        ssl,
+        lhttpc
     ]},
     {mod, {door_app, []}},
     {env, []}

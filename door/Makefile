@@ -1,7 +1,8 @@
 PROJECT = door
  
-DEPS = cowboy
+DEPS = cowboy lhttpc
 dep_cowboy = pkg://cowboy master
+dep_lhttpc = https://github.com/esl/lhttpc.git master
 
 ifeq ($(ENV),)
 	APP_ENV ?= dev
