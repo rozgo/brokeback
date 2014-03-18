@@ -13,7 +13,8 @@
         cowboy,
         inets,
         ssl,
-        lhttpc
+        lhttpc,
+        eredis
     ]},
     {mod, {door_app, []}},
     {env, []}

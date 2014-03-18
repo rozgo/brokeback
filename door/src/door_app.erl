@@ -16,7 +16,8 @@ start(_Type, _Args) ->
             {"/i", info_handler, []},
             {"/p", push_handler, []},
             {"/e", echo_handler, []},
-            {"/r", receipt_handler, []}
+            {"/r", receipt_handler, []},
+            {"/w", world_handler, []}
         ]}
     ]),
     PrivDir = code:priv_dir(door),
