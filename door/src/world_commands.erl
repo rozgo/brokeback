@@ -15,8 +15,8 @@ submit(Pid, << Cmd:32/integer-little, Rest/binary >>) ->
 
 world() ->
     {ok, Redis} = eredis:start_link(
-        "red1.toqrlt.0001.usw1.cache.amazonaws.com"
-        % application:get_env(redis, port)
+        "red1.toqrlt.0001.usw1.cache.amazonaws.com", 
+        6379
     ),
     world(Redis).
 
