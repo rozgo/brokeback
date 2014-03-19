@@ -14,11 +14,10 @@ websocket_init(_TransportName, Req, _Opts) ->
     {ok, Req, undefined_state}.
 
 websocket_handle({binary, Blob}, Req, State) ->
-    io:format("Received: ~p~n", [Blob]),
     world_commands:submit(self(), Blob),
     {ok, Req, State};
 websocket_handle(Blob, Req, State) ->
-    io:format("Received: ~p~n", [Blob]),
+    io:format("ERROR[websocket_handle] - Received: ~p~n", [Blob]),
     {ok, Req, State}.
 
 websocket_info({push, noop}, Req, State) ->
@@ -31,6 +30,3 @@ websocket_info(_Info, Req, State) ->
 
 websocket_terminate(_Reason, _Req, _State) ->
     ok.
-
-
-
