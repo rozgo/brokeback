@@ -8,15 +8,19 @@
 -define(ACTION_FETCH_TILE, 200000).
 -define(ACTION_TELEPORT,   300000).
 -define(ACTION_BATTLE_CMD, 400000).
+-define(ACTION_SPAWN_RES,  500000).
 
 -define(RESPONSE_TYPE_TILE, 2115261812).
 -define(RESPONSE_TYPE_BATTLE_CMD, -1248618669).
 
--define(TILE_TYPE_BASE, 2063089).
--define(TILE_TYPE_LAND, 2063089).
+-define(TILE_TYPE_BASE,     2063089).
+-define(TILE_TYPE_LAND,     2063089).
+-define(TILE_TYPE_RESOURCE, -276420562).
 
 submit(Pid, << Cmd:32/integer-little, Rest/binary >>) ->
-    world_proc() ! {Pid, Cmd, Rest}.
+    world_proc() ! {Pid, Cmd, Rest};
+submit(Pid, _Other) ->
+    io:format("Pid ~p invalid binary sequence ~p~n", [Pid, _Other]).
 
 world() ->
     {ok, Hostname} = application:get_env(door, redis_hostname),
@@ -50,7 +54,11 @@ world(C, TileList) ->
         {_Pid, ?ACTION_BATTLE_CMD, Rest} ->
             io:format("Cmd[~p]: ~p~n", [_Pid, ?ACTION_BATTLE_CMD]),
             {Coord, Cmd} = exec_battle_command(C, Rest),
-            broadcast_cmd(TileList, Coord, Cmd);
+            broadcast_to_listeners(TileList, Coord, Cmd);
+        {_Pid, ?ACTION_SPAWN_RES, Rest} ->
+            io:format("Cmd[~p]: ~p~n", [_Pid, ?ACTION_SPAWN_RES]),
+            {Coord, Res} = spawn_resource(C, Rest),
+            broadcast_to_listeners(TileList, Coord, Res);
         {_Pid, Cmd, _} -> 
             io:format("Mensaje desconocido: ~p~n", [Cmd]);
         _Message ->
@@ -82,36 +90,39 @@ add_tile_listener(C, Listeners, TileKey, CmdKey, Pid) ->
             ets:insert(Listeners, {TileKey, AppendListener(lists:sublist(Pids, ?PARAM_MAX_TILE_LISTENERS))})
     end.
 
+broadcast(Pids, Blob) when is_list(Pids), is_binary(Blob) ->
+    lists:foldl(fun(Pid, _) ->
+        io:format("Notifying ~p~n", [Pid]),
+        Pid ! {push, Blob}
+    end, ok, Pids);
+broadcast(Pid, Blobs) when is_pid(Pid), is_list(Blobs) ->
+    lists:foldl(fun(Blob, _) ->
+        io:format("Notifying ~p~n", [Pid]),
+        Pid ! {push, Blob}
+    end, ok, Blobs).
+
+
 notify_listeners(Listeners, TileKey, Tile) ->
-    % io:format("Attempting to notify ~p~n", [TileKey]),
     case ets:lookup(Listeners, TileKey) of
         [] -> ok;
         [{_, Pids}] ->
-            lists:foldl(fun(Pid, _) ->
-                Pid ! {push, Tile}
-                
-            end, ok, Pids)
+            broadcast(Pids, Tile)
     end.
 
 broadcast_cmd_history(C, CmdKey, Pid) ->
     case eredis:q(C, ["LRANGE", CmdKey, 0, -1]) of 
         {ok, BattleCommands} ->
-            lists:foldl(fun(Cmd, _) ->
-                Pid ! {push, Cmd}
-            end, ok, BattleCommands);
+            broadcast(Pid, BattleCommands);
         {_Other} -> io:format("Redis Error: ~p~n", [_Other])
     end.
 
-broadcast_cmd(Listeners, {X, Y}, Cmd) ->
+broadcast_to_listeners(Listeners, {X, Y}, Cmd) ->
     TileKey = format_coord(X, Y),
     case ets:lookup(Listeners, TileKey) of
         [] ->
             ok;
         [{_, Pids}] ->
-            lists:foldl(fun(Pid, _) ->
-                io:format("Battle: ~p <- ~p~n", [Pid, TileKey]),
-                Pid ! {push, Cmd}
-            end, ok, Pids)
+            broadcast(Pids, Cmd)
     end.
 
 get_user_base(C, Username) ->
@@ -172,6 +183,12 @@ exec_battle_command(C, <<BattleId:10/binary, X:64/float-little, Y:64/float-littl
     eredis:q(C, ["EXPIRE", CmdKey, 60]),
     {{X, Y}, Cmd}.
 
+spawn_resource(C, <<X:64/float-little, Y:64/float-little, _:10/binary, ResType:32/little, Blob/binary>>) ->
+    Tile = build_tile(?TILE_TYPE_RESOURCE, X, Y, ResType, Blob),
+    ResKey = format_coord(X, Y),
+    io:format("Resource@~s~n", [ResKey]),
+    eredis:q(C, ["SET", ResKey, Tile]),
+    {{X, Y}, Tile}.
 
 % fetch_tiles(C, TileList) when is_binary(TileList) ->
 %     Commands = [ ["GET", format_coord(X, Y) ] || <<X:64/float, Y:64/float>> <= TileList ],
@@ -181,14 +198,22 @@ exec_battle_command(C, <<BattleId:10/binary, X:64/float-little, Y:64/float-littl
 put_tile(C, X, Y, TileInfo) ->
     Key = format_coord(X, Y),
     io:format("put_tile(~p) <- ~p~n", [Key, TileInfo]),
-    {ok, _} = eredis:q(C, ["SET", Key, TileInfo]),
-    ok.
+    case eredis:q(C, ["SET", Key, TileInfo]) of
+        {ok, _} -> ok;
+        {error, Reason} -> 
+            io:format("Didn't put ~s because ~p~n", [Key, Reason]);
+        _Other ->
+            io:format("Wat? ~p~n", [_Other])
+    end.
 
 %% "Private" functions
 
 build_tile(?TILE_TYPE_BASE, X, Y, Username, BaseId) ->
     PaddedUsername = list_to_binary(string:left(binary_to_list(Username), 10, 32)),
-    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, PaddedUsername/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>.
+    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, PaddedUsername/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>;
+build_tile(?TILE_TYPE_RESOURCE, X, Y, ResType, Blob) ->
+    EmptyOccupant = << <<0>> || _ <- lists:seq(1, 10) >>,
+    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, EmptyOccupant/binary, ResType:32/little, Blob/binary>>.
 
 build_tile(?TILE_TYPE_LAND, X, Y) ->
     <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little>>.
@@ -201,7 +226,7 @@ explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/flo
 explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, Username:10/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>) ->
     {?RESPONSE_TYPE_TILE, ?TILE_TYPE_BASE, X, Y, binary_to_list(Username), BaseId};
 explode_tile(_Other) ->
-    io:format("ERROR - Can't decode: ~p~n", [_Other]).
+    io:format("ERROR - Can't decode tile: ~p~n", [_Other]).
 
 explode_battle_cmd(<<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, X:64/float-little, Y:64/float-little, Command/binary>>) ->
     {?RESPONSE_TYPE_BATTLE_CMD, BattleId, X, Y, Command}.
@@ -230,7 +255,6 @@ format_coord(X, Y) when is_float(X), is_float(Y) ->
 
 format_battle(X, Y) when is_float(X), is_float(Y) -> 
     lists:flatten(io_lib:format("B[~p,~p]", [round(X), round(Y)])).
-
 
 world_proc() ->
     case global:whereis_name(world) of
