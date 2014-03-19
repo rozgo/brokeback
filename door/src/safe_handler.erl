@@ -11,7 +11,7 @@ handle(Req, State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
     % io:format("BODY: ~s~n", [Body]),
     Query = mochijson2:decode(Body),
-    io:format("Query: ~p~n", [Query]),
+    % io:format("Query: ~p~n", [Query]),
     {Code, Response} = command(Query),
     {ok, Req3} = cowboy_req:reply(Code,[
         {<<"Access-Control-Allow-Origin">>, <<"*">>},
