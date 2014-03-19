@@ -21,6 +21,7 @@ submit(Pid, << Cmd:32/integer-little, Rest/binary >>) ->
 world() ->
     {ok, Hostname} = application:get_env(door, redis_hostname),
     {ok, Port}     = application:get_env(door, redis_port),
+    io:format("Redis Connection ~s:~p~n", [Hostname, Port]),
     {ok, Redis}    = eredis:start_link(Hostname, Port),
     world(Redis, ets:new(tile_listeners, [set])).
 
@@ -66,7 +67,7 @@ add_tile_listener(C, Listeners, TileKey, CmdKey, Pid) ->
     AppendListener = fun(Pids) ->
         case lists:member(Pid, Pids) of
             false ->
-                % io:format("~p listening to ~p~n", [[Pid | Pids], TileKey]),
+                io:format("~p listening to ~p~n", [[Pid | Pids], TileKey]),
                 broadcast_cmd_history(C, CmdKey, Pid), 
                 [Pid | Pids];
             true  -> Pids
@@ -154,7 +155,21 @@ teleport_base(C, <<Username:10/binary, X:64/float-little, Y:64/float-little>>) -
 exec_battle_command(C, <<BattleId:10/binary, X:64/float-little, Y:64/float-little, CmdStr/binary>>) ->
     CmdKey  = format_battle(X, Y),
     Cmd     = build_battle_cmd(BattleId, X, Y, CmdStr),
+    case eredis:q(C, ["LINDEX", CmdKey, 0]) of
+        {ok, undefined} ->
+            ok;
+        {ok, LastCmd} ->
+            io:format("LastCmd: ~p~n", [LastCmd]),
+            {_, LastBattleId, _, _, _} = explode_battle_cmd(LastCmd),
+            if
+                LastBattleId /= BattleId ->
+                    eredis:q(C, ["DEL", CmdKey]);
+                true -> 
+                    ok
+            end
+    end,
     eredis:q(C, ["RPUSH", CmdKey, Cmd]),
+    eredis:q(C, ["EXPIRE", CmdKey, 60]),
     {{X, Y}, Cmd}.
 
 
@@ -173,20 +188,23 @@ put_tile(C, X, Y, TileInfo) ->
 
 build_tile(?TILE_TYPE_BASE, X, Y, Username, BaseId) ->
     PaddedUsername = list_to_binary(string:left(binary_to_list(Username), 10, 32)),
-    <<?RESPONSE_TYPE_TILE:32/little, X:64/float-little, Y:64/float-little, PaddedUsername/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>.
+    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, PaddedUsername/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>.
 
 build_tile(?TILE_TYPE_LAND, X, Y) ->
-    <<?RESPONSE_TYPE_TILE:32/little, X:64/float-little, Y:64/float-little>>.
+    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little>>.
 
 build_battle_cmd(BattleId, X, Y, Command) ->
-    <<?RESPONSE_TYPE_BATTLE_CMD:32/little, BattleId:10/binary, X:64/float-little, Y:64/float-little, Command/binary >>.
+    <<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, X:64/float-little, Y:64/float-little, Command/binary >>.
 
-explode_tile(<<?RESPONSE_TYPE_TILE:32/little, X:64/float-little, Y:64/float-little,  ?TILE_TYPE_LAND:32/little>>) ->
+explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little,  ?TILE_TYPE_LAND:32/little>>) ->
     {?RESPONSE_TYPE_TILE, ?TILE_TYPE_LAND, X, Y};
-explode_tile(<<?RESPONSE_TYPE_TILE:32/little, X:64/float-little, Y:64/float-little, Username:10/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>) ->
+explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, Username:10/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>) ->
     {?RESPONSE_TYPE_TILE, ?TILE_TYPE_BASE, X, Y, binary_to_list(Username), BaseId};
 explode_tile(_Other) ->
     io:format("ERROR - Can't decode: ~p~n", [_Other]).
+
+explode_battle_cmd(<<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, X:64/float-little, Y:64/float-little, Command/binary>>) ->
+    {?RESPONSE_TYPE_BATTLE_CMD, BattleId, X, Y, Command}.
 
 generate_base(C, Username) ->
     random:seed(now()),
