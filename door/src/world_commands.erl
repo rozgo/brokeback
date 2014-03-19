@@ -9,18 +9,18 @@
 -define(ACTION_TELEPORT,   300000).
 -define(ACTION_BATTLE_CMD, 400000).
 -define(ACTION_SPAWN_RES,  500000).
+-define(ACTION_MOBILIZE,   600000).
 
--define(RESPONSE_TYPE_TILE, 2115261812).
+-define(RESPONSE_TYPE_TILE,        2115261812).
 -define(RESPONSE_TYPE_BATTLE_CMD, -1248618669).
+-define(RESPONSE_TYPE_MOBILIZE,   -1896823039).
 
 -define(TILE_TYPE_BASE,     2063089).
 -define(TILE_TYPE_LAND,     2063089).
 -define(TILE_TYPE_RESOURCE, -276420562).
 
 submit(Pid, << Cmd:32/integer-little, Rest/binary >>) ->
-    world_proc() ! {Pid, Cmd, Rest};
-submit(Pid, _Other) ->
-    io:format("Pid ~p invalid binary sequence ~p~n", [Pid, _Other]).
+    world_proc() ! {Pid, Cmd, Rest}.
 
 world() ->
     {ok, Hostname} = application:get_env(door, redis_hostname),
@@ -59,6 +59,11 @@ world(C, TileList) ->
             io:format("Cmd[~p]: ~p~n", [_Pid, ?ACTION_SPAWN_RES]),
             {Coord, Res} = spawn_resource(C, Rest),
             broadcast_to_listeners(TileList, Coord, Res);
+        {_Pid, ?ACTION_MOBILIZE, Rest} ->
+            io:format("Cmd[~p]: ~p~n", [_Pid, ?ACTION_MOBILIZE]),
+            {From, To, Mob} = exec_mobilization(C, Rest),
+            broadcast_to_listeners(TileList, From, Mob),
+            broadcast_to_listeners(TileList, To  , Mob);
         {_Pid, Cmd, _} -> 
             io:format("Mensaje desconocido: ~p~n", [Cmd]);
         _Message ->
@@ -68,15 +73,11 @@ world(C, TileList) ->
 
 add_tile_listener(C, Listeners, {X, Y}, Pid) ->
     TileKey = format_coord(X, Y),
-    CmdKey = format_battle(X, Y),
-    add_tile_listener(C, Listeners, TileKey, CmdKey, Pid).
-
-add_tile_listener(C, Listeners, TileKey, CmdKey, Pid) ->
     AppendListener = fun(Pids) ->
         case lists:member(Pid, Pids) of
             false ->
                 io:format("~p listening to ~p~n", [[Pid | Pids], TileKey]),
-                broadcast_cmd_history(C, CmdKey, Pid), 
+                broadcast_events_history(C, {X, Y}, Pid), 
                 [Pid | Pids];
             true  -> Pids
         end
@@ -101,7 +102,6 @@ broadcast(Pid, Blobs) when is_pid(Pid), is_list(Blobs) ->
         Pid ! {push, Blob}
     end, ok, Blobs).
 
-
 notify_listeners(Listeners, TileKey, Tile) ->
     case ets:lookup(Listeners, TileKey) of
         [] -> ok;
@@ -109,10 +109,14 @@ notify_listeners(Listeners, TileKey, Tile) ->
             broadcast(Pids, Tile)
     end.
 
-broadcast_cmd_history(C, CmdKey, Pid) ->
-    case eredis:q(C, ["LRANGE", CmdKey, 0, -1]) of 
-        {ok, BattleCommands} ->
-            broadcast(Pid, BattleCommands);
+broadcast_events_history(C, {X, Y}, Pid) ->
+    broadcast_event_history(C, Pid, format_battle(X, Y)),
+    broadcast_event_history(C, Pid, format_mobilization(X, Y)).
+
+broadcast_event_history(C, Pid, EvtKey) ->
+    case eredis:q(C, ["LRANGE", EvtKey, 0, -1]) of 
+        {ok, Events} ->
+            broadcast(Pid, Events);
         {_Other} -> io:format("Redis Error: ~p~n", [_Other])
     end.
 
@@ -179,8 +183,7 @@ exec_battle_command(C, <<BattleId:10/binary, X:64/float-little, Y:64/float-littl
                     ok
             end
     end,
-    eredis:q(C, ["RPUSH", CmdKey, Cmd]),
-    eredis:q(C, ["EXPIRE", CmdKey, 60]),
+    put_expiring_event(C, CmdKey, Cmd, 60),
     {{X, Y}, Cmd}.
 
 spawn_resource(C, <<X:64/float-little, Y:64/float-little, _:10/binary, ResType:32/little, Blob/binary>>) ->
@@ -189,6 +192,16 @@ spawn_resource(C, <<X:64/float-little, Y:64/float-little, _:10/binary, ResType:3
     io:format("Resource@~s~n", [ResKey]),
     eredis:q(C, ["SET", ResKey, Tile]),
     {{X, Y}, Tile}.
+
+exec_mobilization(C, <<FromX:64/float-little, FromY:64/float-little, ToX:64/float-little, ToY:64/float-little, 
+    PlayerId:10/binary, Start:32/little, Duration:32/little, MobType:32/little>>) ->
+    Mob = build_mobilization(FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType),
+    FromKey = format_mobilization(FromX, FromY),
+    ToKey = format_mobilization(ToX, ToY),
+
+    put_expiring_event(C, FromKey, Mob, Duration),
+    put_expiring_event(C, ToKey,   Mob, Duration),
+    {{FromX, FromY}, {ToX, ToY}, Mob}.
 
 % fetch_tiles(C, TileList) when is_binary(TileList) ->
 %     Commands = [ ["GET", format_coord(X, Y) ] || <<X:64/float, Y:64/float>> <= TileList ],
@@ -208,9 +221,13 @@ put_tile(C, X, Y, TileInfo) ->
 
 %% "Private" functions
 
-build_tile(?TILE_TYPE_BASE, X, Y, Username, BaseId) ->
-    PaddedUsername = list_to_binary(string:left(binary_to_list(Username), 10, 32)),
-    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, PaddedUsername/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>;
+put_expiring_event(C, EvtKey, Evt, Duration) ->
+    eredis:q(C, ["RPUSH", EvtKey, Evt]),
+    eredis:q(C, ["EXPIRE", EvtKey, Duration]).
+
+build_tile(?TILE_TYPE_BASE, X, Y, PlayerId, BaseId) ->
+    PaddedPlayerId = pad_player_id(PlayerId),
+    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, PaddedPlayerId/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>;
 build_tile(?TILE_TYPE_RESOURCE, X, Y, ResType, Blob) ->
     EmptyOccupant = << <<0>> || _ <- lists:seq(1, 10) >>,
     <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, EmptyOccupant/binary, ResType:32/little, Blob/binary>>.
@@ -220,6 +237,19 @@ build_tile(?TILE_TYPE_LAND, X, Y) ->
 
 build_battle_cmd(BattleId, X, Y, Command) ->
     <<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, X:64/float-little, Y:64/float-little, Command/binary >>.
+
+build_mobilization(FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType) ->
+    io:format("FromX = ~p, FromY = ~p, ToX = ~p, ToY = ~p, PlayerId = ~p, Start = ~p, Duration = ~p, MobType = ~p~n", [FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType]),
+    From = binary_coord(FromX, FromY),
+    To   = binary_coord(ToX, ToY),
+    PaddedPlayerId = pad_player_id(PlayerId),
+    <<?RESPONSE_TYPE_MOBILIZE:32/little-signed, From/binary, To/binary, PaddedPlayerId/binary, Start:32/little, Duration:32/little, MobType:32/little>>.
+
+binary_coord(X, Y) when is_float(X), is_float(Y) ->
+    << X:64/float-little, Y:64/float-little>>.
+
+pad_player_id(PlayerId) ->
+    list_to_binary(string:left(binary_to_list(PlayerId), 10, 32)).
 
 explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little,  ?TILE_TYPE_LAND:32/little>>) ->
     {?RESPONSE_TYPE_TILE, ?TILE_TYPE_LAND, X, Y};
@@ -243,7 +273,6 @@ parse_tile(Tile) ->
     <<Res:32/little, X:64/float-little, Y:64/float-little, Username:10/binary, TileType:32/little, Base:32/little>> = Tile,
     {Res, X, Y, Username, TileType, Base}.
 
-
 format_user(Username) ->
     io_lib:format("U[~s]", [ binary_to_list(Username) ]).
 
@@ -255,6 +284,9 @@ format_coord(X, Y) when is_float(X), is_float(Y) ->
 
 format_battle(X, Y) when is_float(X), is_float(Y) -> 
     lists:flatten(io_lib:format("B[~p,~p]", [round(X), round(Y)])).
+
+format_mobilization(X, Y) when is_float(X), is_float(Y) -> 
+    io_lib:format("M[~p,~p]", [round(X), round(Y)]).
 
 world_proc() ->
     case global:whereis_name(world) of
