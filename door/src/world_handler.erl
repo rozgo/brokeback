@@ -11,11 +11,13 @@ init({tcp, http}, _Req, _Opts) ->
     {upgrade, protocol, cowboy_websocket}.
 
 websocket_init(_TransportName, Req, _Opts) ->
-    erlang:start_timer(10000, self(), <<0>>),
+    erlang:start_timer(10000, self(), ok),
     {ok, Req, undefined_state}.
 
 websocket_handle({binary, Blob}, Req, State) ->
     world_commands:submit(self(), Blob),
+    {ok, Req, State};
+websocket_handle({pong, _}, Req, State) ->
     {ok, Req, State};
 websocket_handle(Blob, Req, State) ->
     io:format("ERROR[websocket_handle] - Received: ~p~n", [Blob]),
@@ -23,9 +25,9 @@ websocket_handle(Blob, Req, State) ->
 
 websocket_info({push, noop}, Req, State) ->
     {ok, Req, State};
-websocket_info({timeout, _Ref, Msg}, Req, State) ->
-    erlang:start_timer(10000, self(), <<0>>),
-    {reply, {binary, Msg}, Req, State};
+websocket_info({timeout, _Ref, _Msg}, Req, State) ->
+    erlang:start_timer(10000, self(), ok),
+    {reply, ping, Req, State};
 websocket_info({push, Data}, Req, State) ->
     {reply, {binary, Data}, Req, State};
 websocket_info(_Info, Req, State) ->
