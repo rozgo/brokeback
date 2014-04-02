@@ -1,22 +1,24 @@
 -module(world_commands).
 
--export([submit/2, world/0, parse_tile/1]).
+-export([submit/2, world/0]).
 
 -define(PARAM_MAX_TILE_LISTENERS, 20).
 
--define(ACTION_GET_BASE,   100000).
--define(ACTION_FETCH_TILE, 200000).
--define(ACTION_TELEPORT,   300000).
--define(ACTION_BATTLE_CMD, 400000).
--define(ACTION_SPAWN_RES,  500000).
--define(ACTION_MOBILIZE,   600000).
+-define(ACTION_GET_BASE,     100000).
+-define(ACTION_FETCH_TILE,   200000).
+-define(ACTION_TELEPORT,     300000).
+-define(ACTION_BATTLE_CMD,   400000).
+-define(ACTION_SPAWN_RES,    500000).
+-define(ACTION_MOBILIZE,     600000).
+-define(ACTION_CREATE_CBASE, 700000).
 
 -define(RESPONSE_TYPE_TILE,        2115261812).
 -define(RESPONSE_TYPE_BATTLE_CMD, -1248618669).
 -define(RESPONSE_TYPE_MOBILIZE,   -1896823039).
 
--define(TILE_TYPE_BASE,     2063089).
--define(TILE_TYPE_LAND,     2063089).
+-define(TILE_TYPE_BASE,        2063089).
+-define(TILE_TYPE_CBASE,     336381985).
+-define(TILE_TYPE_LAND,              0).
 -define(TILE_TYPE_RESOURCE, -276420562).
 
 submit(Pid, << Cmd:32/integer-little, Rest/binary >>) ->
@@ -32,38 +34,41 @@ world() ->
 world(C, TileList) ->
     receive 
         {Pid, ?ACTION_GET_BASE, Rest} ->
-            % io:format("Cmd: ~p~n", [?ACTION_GET_BASE]),
             Pid ! {push, get_user_base(C, Rest)};
         {Pid, ?ACTION_FETCH_TILE, Rest} -> 
-            % io:format("Cmd: ~p~n", [?ACTION_FETCH_TILE]),
+            io:format("Cmd: ~p~n", [?ACTION_FETCH_TILE]),
             case fetch_tile(C, Rest) of
                 {Coord, not_found} ->
                     add_tile_listener(C, TileList, Coord, Pid);
                 {Coord, Tile} -> 
                     add_tile_listener(C, TileList, Coord, Pid),
+                    io:format("Broadcast tile ~p~n", [Coord]),
                     Pid ! {push, Tile};
                 _ -> io:format("fetch_tile => ?", [])
             end;
         {_Pid, ?ACTION_TELEPORT, Rest} ->
             io:format("Cmd: ~p~n", [?ACTION_TELEPORT]),
             {BaseCoord, Base, LandCoord, Land} = teleport_base(C, Rest),
-            BaseKey = format_coord(BaseCoord),
-            LandKey = format_coord(LandCoord),
+            BaseKey = make_key_for(coord, BaseCoord),
+            LandKey = make_key_for(coord, LandCoord),
             notify_listeners(TileList, BaseKey, Base),
             notify_listeners(TileList, LandKey, Land);
         {_Pid, ?ACTION_BATTLE_CMD, Rest} ->
-            io:format("Cmd[~p]: ~p~n", [_Pid, ?ACTION_BATTLE_CMD]),
+            io:format("Cmd: ~p~n", [?ACTION_BATTLE_CMD]),
             {Coord, Cmd} = exec_battle_command(C, Rest),
             broadcast_to_listeners(TileList, Coord, Cmd);
         {_Pid, ?ACTION_SPAWN_RES, Rest} ->
-            io:format("Cmd[~p]: ~p~n", [_Pid, ?ACTION_SPAWN_RES]),
+            io:format("Cmd: ~p~n", [?ACTION_SPAWN_RES]),
             {Coord, Res} = spawn_resource(C, Rest),
             broadcast_to_listeners(TileList, Coord, Res);
         {_Pid, ?ACTION_MOBILIZE, Rest} ->
-            io:format("Cmd[~p]: ~p~n", [_Pid, ?ACTION_MOBILIZE]),
+            io:format("Cmd: ~p~n", [?ACTION_MOBILIZE]),
             {From, To, Mob} = exec_mobilization(C, Rest),
             broadcast_to_listeners(TileList, From, Mob),
             broadcast_to_listeners(TileList, To  , Mob);
+        {_Pid, ?ACTION_CREATE_CBASE, Rest} ->
+            io:format("Cmd: ~p~n", [?ACTION_CREATE_CBASE]),
+            create_campaign_base(C, Rest);
         {_Pid, Cmd, _} -> 
             io:format("Mensaje desconocido: ~p~n", [Cmd]);
         _Message ->
@@ -71,13 +76,13 @@ world(C, TileList) ->
     end,
     world(C, TileList).
 
-add_tile_listener(C, Listeners, {X, Y}, Pid) ->
-    TileKey = format_coord(X, Y),
+add_tile_listener(C, Listeners, {X, Z}, Pid) ->
+    TileKey = make_key_for(coord, X, Z),
     AppendListener = fun(Pids) ->
         case lists:member(Pid, Pids) of
             false ->
-                io:format("~p listening to ~p~n", [[Pid | Pids], TileKey]),
-                broadcast_events_history(C, {X, Y}, Pid), 
+                io:format("~p listening to ~s~n", [[Pid | Pids], TileKey]),
+                broadcast_events_history(C, {X, Z}, Pid), 
                 [Pid | Pids];
             true  -> Pids
         end
@@ -93,12 +98,10 @@ add_tile_listener(C, Listeners, {X, Y}, Pid) ->
 
 broadcast(Pids, Blob) when is_list(Pids), is_binary(Blob) ->
     lists:foldl(fun(Pid, _) ->
-        io:format("Notifying ~p~n", [Pid]),
         Pid ! {push, Blob}
     end, ok, Pids);
 broadcast(Pid, Blobs) when is_pid(Pid), is_list(Blobs) ->
     lists:foldl(fun(Blob, _) ->
-        io:format("Notifying ~p~n", [Pid]),
         Pid ! {push, Blob}
     end, ok, Blobs).
 
@@ -106,12 +109,13 @@ notify_listeners(Listeners, TileKey, Tile) ->
     case ets:lookup(Listeners, TileKey) of
         [] -> ok;
         [{_, Pids}] ->
+            io:format("Broadcast ~s to ~p~n", [TileKey, Pids]),
             broadcast(Pids, Tile)
     end.
 
-broadcast_events_history(C, {X, Y}, Pid) ->
-    broadcast_event_history(C, Pid, format_battle(X, Y)),
-    broadcast_event_history(C, Pid, format_mobilization(X, Y)).
+broadcast_events_history(C, {X, Z}, Pid) ->
+    broadcast_event_history(C, Pid, make_key_for(battle, X, Z)),
+    broadcast_event_history(C, Pid, make_key_for(mobilization, X, Z)).
 
 broadcast_event_history(C, Pid, EvtKey) ->
     case eredis:q(C, ["LRANGE", EvtKey, 0, -1]) of 
@@ -120,8 +124,8 @@ broadcast_event_history(C, Pid, EvtKey) ->
         {_Other} -> io:format("Redis Error: ~p~n", [_Other])
     end.
 
-broadcast_to_listeners(Listeners, {X, Y}, Cmd) ->
-    TileKey = format_coord(X, Y),
+broadcast_to_listeners(Listeners, {X, Z}, Cmd) ->
+    TileKey = make_key_for(coord, X, Z),
     case ets:lookup(Listeners, TileKey) of
         [] ->
             ok;
@@ -130,8 +134,7 @@ broadcast_to_listeners(Listeners, {X, Y}, Cmd) ->
     end.
 
 get_user_base(C, Username) ->
-    Key = format_user(Username),
-    io:format("Key lookup: ~s~n", [Key]),
+    Key = make_key_for(user, Username),
     {ok, Result} = eredis:q(C, ["GET", Key]),
     ResBase = case Result of 
         undefined ->
@@ -141,35 +144,34 @@ get_user_base(C, Username) ->
         Base ->
             Base
     end,
-    io:format("Base ~p~n", [ResBase]),
     ResBase.
 
-fetch_tile(C, << X:64/float-little, Y:64/float-little >>) ->
-    Key = format_coord(X, Y),
+fetch_tile(C, << X:64/float-little, Z:64/float-little >>) ->
+    Key = make_key_for(coord, X, Z),
     case eredis:q(C, ["GET", Key]) of
-        {ok, undefined} -> {{X, Y}, not_found};
+        {ok, undefined} -> {{X, Z}, not_found};
         {ok, Tile} ->
-            {{X, Y}, Tile}
+            {{X, Z}, Tile}
     end.
 
-teleport_base(C, <<Username:10/binary, X:64/float-little, Y:64/float-little>>) ->
-    io:format("teleport_base(~p, ~p, ~p)~n", [binary_to_list(Username), X, Y]),
+teleport_base(C, <<Username:10/binary, X:64/float-little, Z:64/float-little>>) ->
+    io:format("teleport_base(~p, ~p, ~p)~n", [binary_to_list(Username), X, Z]),
     {_, ?TILE_TYPE_BASE, OldX, OldY, _, BaseId} = explode_tile(get_user_base(C, Username)),
-    NewBase = build_tile(?TILE_TYPE_BASE, X, Y, Username, BaseId),
+    NewBase = build_tile(?TILE_TYPE_BASE, X, Z, Username, BaseId),
     NewLand = build_tile(?TILE_TYPE_LAND, OldX, OldY),
-    UserKey = format_user(Username),
+    UserKey = make_key_for(user, Username),
     eredis:q(C, ["SET", UserKey, NewBase]),
 
-    LandCoord = format_coord(OldX, OldY),
+    LandCoord = make_key_for(coord, OldX, OldY),
     eredis:q(C, ["SET", LandCoord, NewLand]),
 
-    BaseCoord = format_coord(X, Y),
+    BaseCoord = make_key_for(coord, X, Z),
     eredis:q(C, ["SET", BaseCoord, NewBase]),
-    {{X, Y}, NewBase, {OldX, OldY}, NewLand}.
+    {{X, Z}, NewBase, {OldX, OldY}, NewLand}.
 
-exec_battle_command(C, <<BattleId:10/binary, X:64/float-little, Y:64/float-little, CmdStr/binary>>) ->
-    CmdKey  = format_battle(X, Y),
-    Cmd     = build_battle_cmd(BattleId, X, Y, CmdStr),
+exec_battle_command(C, <<BattleId:10/binary, X:64/float-little, Z:64/float-little, CmdStr/binary>>) ->
+    CmdKey  = make_key_for(battle, X, Z),
+    Cmd     = build_battle_cmd(BattleId, X, Z, CmdStr),
     case eredis:q(C, ["LINDEX", CmdKey, 0]) of
         {ok, undefined} ->
             ok;
@@ -183,33 +185,38 @@ exec_battle_command(C, <<BattleId:10/binary, X:64/float-little, Y:64/float-littl
                     ok
             end
     end,
-    put_expiring_event(C, CmdKey, Cmd, 60),
-    {{X, Y}, Cmd}.
+    push_expiring_event(C, CmdKey, Cmd, 60),
+    {{X, Z}, Cmd}.
 
-spawn_resource(C, <<X:64/float-little, Y:64/float-little, _:10/binary, ResType:32/little, Blob/binary>>) ->
-    Tile = build_tile(?TILE_TYPE_RESOURCE, X, Y, ResType, Blob),
-    ResKey = format_coord(X, Y),
+spawn_resource(C, <<X:64/float-little, Z:64/float-little, _:10/binary, ResType:32/little, Blob/binary>>) ->
+    Tile = build_tile(?TILE_TYPE_RESOURCE, X, Z, ResType, Blob),
+    ResKey = make_key_for(coord, X, Z),
     io:format("Resource@~s~n", [ResKey]),
     eredis:q(C, ["SET", ResKey, Tile]),
-    {{X, Y}, Tile}.
+    {{X, Z}, Tile}.
 
 exec_mobilization(C, <<FromX:64/float-little, FromY:64/float-little, ToX:64/float-little, ToY:64/float-little, 
     PlayerId:10/binary, Start:32/little, Duration:32/little, MobType:32/little>>) ->
     Mob = build_mobilization(FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType),
-    FromKey = format_mobilization(FromX, FromY),
-    ToKey = format_mobilization(ToX, ToY),
+    FromKey = make_key_for(mobilization, FromX, FromY),
+    ToKey = make_key_for(mobilization, ToX, ToY),
 
-    put_expiring_event(C, FromKey, Mob, Duration),
-    put_expiring_event(C, ToKey,   Mob, Duration),
+    push_expiring_event(C, FromKey, Mob, Duration),
+    push_expiring_event(C, ToKey,   Mob, Duration),
     {{FromX, FromY}, {ToX, ToY}, Mob}.
 
+create_campaign_base(C, <<Username:10/binary, X:64/float-little, Z:64/float-little>>) ->
+    Tile = build_tile(?TILE_TYPE_CBASE, X, Z, Username, 0),
+    put_tile(C, X, Z, Tile),
+    Tile.
+
 % fetch_tiles(C, TileList) when is_binary(TileList) ->
-%     Commands = [ ["GET", format_coord(X, Y) ] || <<X:64/float, Y:64/float>> <= TileList ],
+%     Commands = [ ["GET", format_coord(X, Z) ] || <<X:64/float, Z:64/float>> <= TileList ],
 %     Res = eredis:qp(C, Commands),
 %     [ Value || {ok, Value} <- Res, Value /= undefined ].
 
-put_tile(C, X, Y, TileInfo) ->
-    Key = format_coord(X, Y),
+put_tile(C, X, Z, TileInfo) ->
+    Key = make_key_for(coord, X, Z),
     io:format("put_tile(~p) <- ~p~n", [Key, TileInfo]),
     case eredis:q(C, ["SET", Key, TileInfo]) of
         {ok, _} -> ok;
@@ -221,22 +228,31 @@ put_tile(C, X, Y, TileInfo) ->
 
 %% "Private" functions
 
-put_expiring_event(C, EvtKey, Evt, Duration) ->
+push_expiring_event(C, EvtKey, Evt, Duration) ->
     eredis:q(C, ["RPUSH", EvtKey, Evt]),
     eredis:q(C, ["EXPIRE", EvtKey, Duration]).
 
-build_tile(?TILE_TYPE_BASE, X, Y, PlayerId, BaseId) ->
+build_base_tile(Type, X, Z, PlayerId, BaseId) ->
     PaddedPlayerId = pad_player_id(PlayerId),
-    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, PaddedPlayerId/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>;
-build_tile(?TILE_TYPE_RESOURCE, X, Y, ResType, Blob) ->
-    EmptyOccupant = << <<0>> || _ <- lists:seq(1, 10) >>,
-    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, EmptyOccupant/binary, ResType:32/little, Blob/binary>>.
+    Coord = binary_coord(X, Z),
+    <<?RESPONSE_TYPE_TILE:32/little-signed, Coord/binary, PaddedPlayerId/binary, Type:32/little, BaseId:32/little>>.    
 
-build_tile(?TILE_TYPE_LAND, X, Y) ->
-    <<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little>>.
+build_tile(?TILE_TYPE_BASE, X, Z, PlayerId, BaseId) ->
+    build_base_tile(?TILE_TYPE_BASE, X, Z, PlayerId, BaseId);
+build_tile(?TILE_TYPE_CBASE, X, Z, PlayerId, BaseId) ->
+    build_base_tile(?TILE_TYPE_CBASE, X, Z, PlayerId, BaseId);
+build_tile(?TILE_TYPE_RESOURCE, X, Z, ResType, Blob) ->
+    EmptyOccupant = list_to_binary([ "0" || _ <- lists:seq(1, 10) ]),
+    Coord = binary_coord(X, Z),
+    <<?RESPONSE_TYPE_TILE:32/little-signed, Coord/binary, EmptyOccupant/binary, ResType:32/little, Blob/binary>>.
 
-build_battle_cmd(BattleId, X, Y, Command) ->
-    <<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, X:64/float-little, Y:64/float-little, Command/binary >>.
+build_tile(?TILE_TYPE_LAND, X, Z) ->
+    Coord = binary_coord(X, Z),
+    <<?RESPONSE_TYPE_TILE:32/little-signed, Coord/binary>>.
+
+build_battle_cmd(BattleId, X, Z, Command) ->
+    Coord = binary_coord(X, Z),
+    <<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, Coord/binary, Command/binary >>.
 
 build_mobilization(FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType) ->
     io:format("FromX = ~p, FromY = ~p, ToX = ~p, ToY = ~p, PlayerId = ~p, Start = ~p, Duration = ~p, MobType = ~p~n", [FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType]),
@@ -245,48 +261,41 @@ build_mobilization(FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType) -
     PaddedPlayerId = pad_player_id(PlayerId),
     <<?RESPONSE_TYPE_MOBILIZE:32/little-signed, From/binary, To/binary, PaddedPlayerId/binary, Start:32/little, Duration:32/little, MobType:32/little>>.
 
-binary_coord(X, Y) when is_float(X), is_float(Y) ->
-    << X:64/float-little, Y:64/float-little>>.
+binary_coord(X, Z) when is_float(X), is_float(Z) ->
+    << X:64/float-little, Z:64/float-little>>.
 
 pad_player_id(PlayerId) ->
     list_to_binary(string:left(binary_to_list(PlayerId), 10, 32)).
 
-explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little,  ?TILE_TYPE_LAND:32/little>>) ->
-    {?RESPONSE_TYPE_TILE, ?TILE_TYPE_LAND, X, Y};
-explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Y:64/float-little, Username:10/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>) ->
-    {?RESPONSE_TYPE_TILE, ?TILE_TYPE_BASE, X, Y, binary_to_list(Username), BaseId};
+explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Z:64/float-little,  ?TILE_TYPE_LAND:32/little>>) ->
+    {?RESPONSE_TYPE_TILE, ?TILE_TYPE_LAND, X, Z};
+explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Z:64/float-little, Username:10/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>) ->
+    {?RESPONSE_TYPE_TILE, ?TILE_TYPE_BASE, X, Z, binary_to_list(Username), BaseId};
 explode_tile(_Other) ->
     io:format("ERROR - Can't decode tile: ~p~n", [_Other]).
 
-explode_battle_cmd(<<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, X:64/float-little, Y:64/float-little, Command/binary>>) ->
-    {?RESPONSE_TYPE_BATTLE_CMD, BattleId, X, Y, Command}.
+explode_battle_cmd(<<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, X:64/float-little, Z:64/float-little, Command/binary>>) ->
+    {?RESPONSE_TYPE_BATTLE_CMD, BattleId, X, Z, Command}.
 
 generate_base(C, Username) ->
     random:seed(now()),
     X = float(round(random:uniform() * 100.0)),
-    Y = float(round(random:uniform() * 100.0)),
-    Tile = build_tile(?TILE_TYPE_BASE, X, Y, Username, 0),
-    put_tile(C, X, Y, Tile),
+    Z = float(round(random:uniform() * 100.0)),
+    Tile = build_tile(?TILE_TYPE_BASE, X, Z, Username, 0),
+    put_tile(C, X, Z, Tile),
     Tile.
 
-parse_tile(Tile) ->
-    <<Res:32/little, X:64/float-little, Y:64/float-little, Username:10/binary, TileType:32/little, Base:32/little>> = Tile,
-    {Res, X, Y, Username, TileType, Base}.
+make_key_for(coord, X, Z) when is_float(X), is_float(Z) -> 
+    io_lib:format("C[~p,~p]", [round(X), round(Z)]);
+make_key_for(battle, X, Z) when is_float(X), is_float(Z) -> 
+    io_lib:format("B[~p,~p]", [round(X), round(Z)]);
+make_key_for(mobilization, X, Z) when is_float(X), is_float(Z) -> 
+    io_lib:format("M[~p,~p]", [round(X), round(Z)]).
 
-format_user(Username) ->
+make_key_for(coord, {X, Z}) when is_float(X), is_float(Z) -> 
+    make_key_for(coord, X, Z);
+make_key_for(user, Username) ->
     io_lib:format("U[~s]", [ binary_to_list(Username) ]).
-
-format_coord({X, Y}) when is_float(X), is_float(Y) -> 
-    format_coord(X, Y).
-
-format_coord(X, Y) when is_float(X), is_float(Y) -> 
-    lists:flatten(io_lib:format("C[~p,~p]", [round(X), round(Y)])).
-
-format_battle(X, Y) when is_float(X), is_float(Y) -> 
-    lists:flatten(io_lib:format("B[~p,~p]", [round(X), round(Y)])).
-
-format_mobilization(X, Y) when is_float(X), is_float(Y) -> 
-    io_lib:format("M[~p,~p]", [round(X), round(Y)]).
 
 world_proc() ->
     case global:whereis_name(world) of
