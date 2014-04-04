@@ -17,7 +17,7 @@
 -define(RESPONSE_TYPE_MOBILIZE,   -1896823039).
 
 -define(TILE_TYPE_BASE,        2063089).
--define(TILE_TYPE_CBASE,     336381985).
+-define(TILE_TYPE_CBASE,     -75274960).
 -define(TILE_TYPE_LAND,              0).
 -define(TILE_TYPE_RESOURCE, -276420562).
 
@@ -68,7 +68,8 @@ world(C, TileList) ->
             broadcast_to_listeners(TileList, To  , Mob);
         {_Pid, ?ACTION_CREATE_CBASE, Rest} ->
             io:format("Cmd: ~p~n", [?ACTION_CREATE_CBASE]),
-            create_campaign_base(C, Rest);
+            {Coord, Base} = create_campaign_base(C, Rest),
+            broadcast_to_listeners(TileList, Coord, Base);
         {_Pid, Cmd, _} -> 
             io:format("Mensaje desconocido: ~p~n", [Cmd]);
         _Message ->
@@ -208,7 +209,7 @@ exec_mobilization(C, <<FromX:64/float-little, FromY:64/float-little, ToX:64/floa
 create_campaign_base(C, <<Username:10/binary, X:64/float-little, Z:64/float-little>>) ->
     Tile = build_tile(?TILE_TYPE_CBASE, X, Z, Username, 0),
     put_tile(C, X, Z, Tile),
-    Tile.
+    {{X, Z}, Tile}.
 
 % fetch_tiles(C, TileList) when is_binary(TileList) ->
 %     Commands = [ ["GET", format_coord(X, Z) ] || <<X:64/float, Z:64/float>> <= TileList ],
@@ -235,7 +236,7 @@ push_expiring_event(C, EvtKey, Evt, Duration) ->
 build_base_tile(Type, X, Z, PlayerId, BaseId) ->
     PaddedPlayerId = pad_player_id(PlayerId),
     Coord = binary_coord(X, Z),
-    <<?RESPONSE_TYPE_TILE:32/little-signed, Coord/binary, PaddedPlayerId/binary, Type:32/little, BaseId:32/little>>.    
+    <<?RESPONSE_TYPE_TILE:32/little-signed, Coord/binary, PaddedPlayerId/binary, Type:32/little-signed, BaseId:32/little>>.    
 
 build_tile(?TILE_TYPE_BASE, X, Z, PlayerId, BaseId) ->
     build_base_tile(?TILE_TYPE_BASE, X, Z, PlayerId, BaseId);
