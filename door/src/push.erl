@@ -6,8 +6,11 @@ start() ->
   PrivDir = code:priv_dir(door),
   Address = "gateway.sandbox.push.apple.com",
   Port = 2195,
-  Cert = PrivDir ++ "/push/apns-dev-cert.pem",
-  Key = PrivDir ++ "/push/apns-dev-key.noenc.pem",  
+
+  {ok, CertFile} = application:get_env(door, push_cert),
+  {ok, KeyFile}  = application:get_env(door, push_key),
+  Cert = PrivDir ++ "/push/" ++ CertFile,
+  Key = PrivDir ++ "/push/" ++ KeyFile,  
 
   Options = [{certfile, Cert}, {keyfile, Key}, {mode, binary}],
   Timeout = 10000,
