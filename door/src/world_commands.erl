@@ -278,10 +278,20 @@ explode_tile(_Other) ->
 explode_battle_cmd(<<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, X:64/float-little, Z:64/float-little, Command/binary>>) ->
     {?RESPONSE_TYPE_BATTLE_CMD, BattleId, X, Z, Command}.
 
-generate_base(C, Username) ->
-    random:seed(now()),
+get_empty_tile(C) ->
+    <<Ra:32, Rb:32, Rc:32>> = crypto:rand_bytes(12),
+    random:seed({Ra, Rb, Rc}),
     X = float(round(random:uniform() * 20.0) - 10),
     Z = float(round(random:uniform() * 20.0) - 10),
+    Key = make_key_for(coord, X, Z),
+    case eredis:q(C, ["GET", Key]) of
+        {ok, undefined} -> {X, Z};
+        {ok, _} ->
+            get_empty_tile(C)
+    end.
+
+generate_base(C, Username) ->
+    {X, Z} = get_empty_tile(C),
     Tile = build_tile(?TILE_TYPE_BASE, X, Z, Username, 0),
     put_tile(C, X, Z, Tile),
     Tile.
