@@ -280,8 +280,8 @@ explode_battle_cmd(<<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/bin
 
 generate_base(C, Username) ->
     random:seed(now()),
-    X = float(round(random:uniform() * 100.0)),
-    Z = float(round(random:uniform() * 100.0)),
+    X = float(round(random:uniform() * 20.0) - 10),
+    Z = float(round(random:uniform() * 20.0) - 10),
     Tile = build_tile(?TILE_TYPE_BASE, X, Z, Username, 0),
     put_tile(C, X, Z, Tile),
     Tile.
