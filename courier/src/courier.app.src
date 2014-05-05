@@ -1,0 +1,17 @@
+{application, courier, [
+    {description, "BoW chat server"},
+    {vsn, "0.1.0"},
+    {modules, []},
+    {registered, [door_sup]},
+    {included_applications, []},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        inets,
+        ssl,
+        cowboy
+    ]},
+    {mod, {courier_app, []}},
+    {env, []}
+]}.

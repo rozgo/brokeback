@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Websocket test</title>
+	<script type="text/javascript">
+		var POOL_SIZE = 5;
+
+		var bindCommand = function(cmdTextNode, buttonNode, subject) {
+			if(! (subject instanceof Array)) {
+				subject = [subject];
+			}
+			var sendCommand = function() {
+				cmdText = cmdTextNode.value;
+				subject.forEach(function(c){
+					c.sendCommand(cmdText);
+				}) 
+				cmdTextNode.value = ''
+				cmdTextNode.focus()
+			}
+			buttonNode.addEventListener('click', function(evt) {
+				sendCommand();
+			});
+
+			cmdTextNode.addEventListener('keydown', function(evt) {
+				if(evt.which == 13) {
+					evt.preventDefault();
+					sendCommand();
+				}
+			});
+		};
+
+		var ChatRoom = function(name) {
+			this.name = name;
+			this.users = [];
+		}
+
+		ChatRoom.prototype.removeUser = function(username) {
+			this.users = this.users.filter(function(u) {
+				return u != username;
+			});
+		};
+
+		ChatRoom.prototype.addUser = function(username) {
+
+		};
+
+		var ChatClient = function(username, element) {
+			this.rooms    = {};
+			this.socket   = new WebSocket('ws://localhost:10000/c');
+			this.element  = element;
+			this.textEl   = element.querySelector('.text');
+			bindCommand(
+				element.querySelector('.cmd'),
+				element.querySelector('.send'),
+				this
+			);
+			this.username = username;
+			this.socketSetup();
+		}
+
+		ChatClient.prototype.socketSetup = function() {
+			var client = this;
+			this.socket.onmessage = function(evt) {
+				var message = JSON.parse(evt.data);
+				if('cmd' in message) {
+					var cmd = message['cmd'];
+
+					if(cmd === 'joined') {
+						console.log('TextReceived[' + client.username + ']');
+						console.log(message);
+						client.onUserJoined(message['room'], message['user']);
+					} else if(cmd === 'history') {
+						console.log('TextReceived[' + client.username + ']');
+						console.log(message);
+						client.onHistory(message['room'], message['hist']);
+					} else if(cmd === 'message') {
+						console.log('TextReceived[' + client.username + ']');
+						console.log(message);
+						client.onMessageReceived(message['room'], message['user'], message['text']);
+					} else if(cmd === 'left') {
+						console.log('TextReceived[' + client.username + ']');
+						console.log(message);
+						client.onUserLeftRoom(message['room'], message['user']);
+					}
+
+				} else {
+					console.log('Bad message')
+					console.log(message)
+				}
+			};
+		};
+
+		ChatClient.prototype.sendCommand = function(txtCmd) {
+			var cmd = txtCmd.split(' ')
+			if(cmd[0] === 'join') {
+				this.joinRoom(cmd[1]);
+			} else if(cmd[0] === 'leave') {
+				this.leaveRoom(cmd[1]);
+			} else {
+				var room = cmd.shift()
+				this.sendMessage(room, cmd.join(' '));
+			}
+		};
+
+		ChatClient.prototype._send = function(cmdObj) {
+			this.socket.send(JSON.stringify(cmdObj))
+		}
+
+		ChatClient.prototype.sendMessage = function(roomName, messageText) {
+			this._send({cmd: 'msg', room: roomName, msg: messageText})			
+		};
+
+		ChatClient.prototype.joinRoom = function(roomName) {
+			this._send({cmd: 'join', user: this.username, room: roomName});
+			this.rooms[roomName] = new ChatRoom(roomName);
+		};
+
+		ChatClient.prototype.leaveRoom = function(roomName) {
+			this._send({cmd: 'leave', room: roomName, user: this.username});
+			delete this.rooms[roomName];
+		}
+
+		ChatClient.prototype._writeLine = function(who, what) {
+			this.textEl.innerHTML += '<li><strong>' + who + ': </strong>' + what + '</li>';
+		};
+
+		ChatClient.prototype.onUserLeftRoom = function(roomName, username) {
+			if (roomName in this.rooms) {
+				this.rooms[roomName].removeUser(username);
+			}
+			this._writeLine('Room ['+ roomName +']', username + ' left the room');
+		};
+
+		ChatClient.prototype.onUserJoined = function(roomName, username) {
+			if (roomName in this.rooms) {
+				this.rooms[roomName].users.push(username);
+			}
+			this._writeLine('Room ['+ roomName +']', username + ' joined the room');
+		};
+
+		ChatClient.prototype.onHistory = function(room, history) {
+			var client = this;
+			if(history.length > 0) {
+				history.forEach(function(hel) {
+					client._writeLine(hel.user, hel.text);
+				});
+			} else {
+				client._writeLine('Room [' + room + ']', 'no history');
+			}
+		}
+
+		ChatClient.prototype.onMessageReceived = function(room, username, message) {
+			this._writeLine(username + '@' + room, message);
+		}
+
+		var createClientPool = function() {
+			var clients = [];
+			for(var i = 0; i < POOL_SIZE; i++) {
+				var clientName = 'client-' + Math.round((Math.random() * 100000) % 1000);
+				var node = document.createElement('div');
+				node.className = 'chat-node';
+				node.innerHTML = 
+					'Chat <strong>'+ clientName +'</strong>' + 
+					'<br/><input type="text" size="30" class="cmd" /><button class="send">Send</button>' + 
+					'<br /><ul class="text"></ul>';
+				document.getElementById('container').appendChild(node);
+				clients.push(new ChatClient(clientName, node));
+			}
+			return clients;
+		}
+		document.addEventListener('DOMContentLoaded', function() {
+			var clients = createClientPool();
+
+			bindCommand(
+				document.getElementById('all'), 
+				document.getElementById('send'),
+				clients
+			);
+		});
+
+	</script>
+	<style type="text/css">
+		body, input, button {
+			font-family: 'Ubuntu Mono';
+		}
+		.chat-node {
+			float: left;
+			width: 300px;
+		}
+		.text {
+			font-size: 12px;
+			border: 1px solid #dedede;
+			list-style: none;
+			padding: 0;
+			margin: 0;
+			width: 280px;
+			min-height: 100px
+		}
+	</style>
+</head>
+<body>
+	<h3>All</h3>
+	<div>
+		<input id="all" type="text" size="30"/><button id="send">Send</button>
+	</div>
+	<br />
+	<div id="container">
+	</div>
+</body>
+</html>
