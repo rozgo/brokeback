@@ -88,7 +88,7 @@ handle_command(S, {struct, CmdObj}) ->
     case proplists:lookup(<<"cmd">>, CmdObj) of 
         {_, <<"join">>} ->
             handle(join, S, CmdObj);
-        {_, <<"msg">>} ->
+        {_, <<"pub">>} ->
             handle(msg, S, CmdObj);
         {_, <<"leave">>} ->
             handle(leave, S, CmdObj)
@@ -100,7 +100,7 @@ get_room_from_cmd(CmdObj, Create) ->
 
 handle(join, S, CmdObj) ->
     Room = get_room_from_cmd(CmdObj, true),
-    {_, User} = proplists:lookup(<<"user">>, CmdObj),
+    {_, User} = proplists:lookup(<<"who">>, CmdObj),
     channel:join_user(Room, User),
     S#sock{ rooms = ordsets:add_element(Room, S#sock.rooms) };
 
