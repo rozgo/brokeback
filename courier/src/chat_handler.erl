@@ -95,7 +95,7 @@ handle_command(S, {struct, CmdObj}) ->
     end.
 
 get_room_from_cmd(CmdObj, Create) ->
-    {_, RoomName} = proplists:lookup(<<"room">>, CmdObj),
+    {_, RoomName} = proplists:lookup(<<"chan">>, CmdObj),
     channel:get_channel(RoomName, Create).
 
 handle(join, S, CmdObj) ->
