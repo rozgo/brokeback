@@ -31,10 +31,10 @@ websocket_handle(_Data, Req, State) ->
 websocket_info({message, Room, Username, MessageText}, Req, State) ->
     Msg = mochijson2:encode({struct, 
         [
-            {cmd, message},
-            {room, Room},
-            {user, Username},
-            {text, MessageText}
+            {cmd,  pub},
+            {chan, Room},
+            {who,  Username},
+            {msg,  MessageText}
         ]
     }),
     io:format("Sent: ~s~n", [Msg]),
@@ -42,9 +42,9 @@ websocket_info({message, Room, Username, MessageText}, Req, State) ->
 websocket_info({joined, Room, Username}, Req, State) ->
     Msg = mochijson2:encode({struct, 
         [
-            {cmd, joined},
-            {room, Room},
-            {user, Username}
+            {cmd,  joined},
+            {chan, Room},
+            {who,  Username}
         ]
     }),
     io:format("Sent: ~s~n", [lists:flatten(Msg)]),
@@ -52,9 +52,9 @@ websocket_info({joined, Room, Username}, Req, State) ->
 websocket_info({left, Room, Username}, Req, State) ->
     Msg = mochijson2:encode({struct, 
         [
-            {cmd, left},
-            {room, Room},
-            {user, Username}
+            {cmd,  left},
+            {chan, Room},
+            {who,  Username}
         ]
     }),
     io:format("Sent: ~s~n", [Msg]),
@@ -62,8 +62,8 @@ websocket_info({left, Room, Username}, Req, State) ->
 websocket_info({history, Room, History}, Req, State) ->
     Msg = mochijson2:encode({struct, 
         [
-            {cmd, history},
-            {room, Room},
+            {cmd,  history},
+            {chan, Room},
             {hist, [ {struct, [{user, User}, {text, Text}]} || {User, Text} <- History ]}
         ]
     }),
