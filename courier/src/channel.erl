@@ -13,7 +13,7 @@
 
 %% gen_server interface
 
-init(Name) ->
+init([Name]) ->
 	{ok, #channel{
 		name    = Name,
 		users   = orddict:new(),
@@ -62,7 +62,7 @@ handle_cast({join, Username, Pid}, S) when is_pid(Pid) ->
 
 			% Broadcast history to new member
 			Pid ! {
-				history, S#channel.name, [ {Hi#hitem.username, Hi#hitem.message} || Hi <- S#channel.history ]
+				history, S#channel.name, [ Hi#hitem.message || Hi <- S#channel.history ]
 				% users  , orddict:fold(fun(_, [Username], Acc) -> [ Username | Acc ] end, [], Users)
 			},
 			{noreply, S#channel{ users = Users }}

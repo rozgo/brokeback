@@ -64,7 +64,7 @@ websocket_info({history, Room, History}, Req, State) ->
         [
             {cmd,  history},
             {chan, Room},
-            {hist, [ {struct, [{user, User}, {text, Text}]} || {User, Text} <- History ]}
+            {items, History}
         ]
     }),
     io:format("Sent: ~s~n", [Msg]),
