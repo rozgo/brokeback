@@ -86,7 +86,8 @@ handle_cast({leave, Pid}, S) ->
 
 					{noreply, S#channel{ users = Users }};
 				_ ->
-					{stop, normal, S}
+					% {stop, normal, S}
+					{noreply, S}
 			end;
 		error ->
 			{noreply, S}
