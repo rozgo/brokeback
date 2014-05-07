@@ -47,9 +47,9 @@ handle_cast({message, Message, Pid}, S) when is_pid(Pid) ->
 
 handle_cast({join, Username, Pid}, S) when is_pid(Pid) ->
 	
-	case orddict:find(Pid, S#channel.users) of
+	NewS = case orddict:find(Pid, S#channel.users) of
 		{ok, _} ->
-			{noreply, S};
+			S;
 		error -> % Client is added only if it doesn't belong to the channel already
 
 			% Broadcast new member
@@ -61,12 +61,14 @@ handle_cast({join, Username, Pid}, S) when is_pid(Pid) ->
 			Users = orddict:append(Pid, Username, S#channel.users),
 
 			% Broadcast history to new member
-			Pid ! {
-				history, S#channel.name, [ Hi#hitem.message || Hi <- S#channel.history ]
-				% users  , orddict:fold(fun(_, [Username], Acc) -> [ Username | Acc ] end, [], Users)
-			},
-			{noreply, S#channel{ users = Users }}
-	end;
+			S#channel{ users = Users }
+	end,
+
+	Pid ! {
+		history, S#channel.name, lists:reverse([ Hi#hitem.message || Hi <- S#channel.history ])
+		% users  , orddict:fold(fun(_, [Username], Acc) -> [ Username | Acc ] end, [], Users)
+	},
+	{noreply, NewS};
 
 handle_cast({leave, Pid}, S) ->
 
