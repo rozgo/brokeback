@@ -71,9 +71,9 @@ world(C, TileList) ->
             {Coord, Base} = create_campaign_base(C, Rest),
             broadcast_to_listeners(TileList, Coord, Base);
         {_Pid, Cmd, _} -> 
-            io:format("Mensaje desconocido: ~p~n", [Cmd]);
+            io:format("Unknown message: ~p~n", [Cmd]);
         _Message ->
-            io:format("Mensaje invalido: ~p~n", [_Message])
+            io:format("Invalid message: ~p~n", [_Message])
     end,
     world(C, TileList).
 
@@ -197,8 +197,8 @@ spawn_resource(C, <<X:64/float-little, Z:64/float-little, _:10/binary, ResType:3
     {{X, Z}, Tile}.
 
 exec_mobilization(C, <<FromX:64/float-little, FromY:64/float-little, ToX:64/float-little, ToY:64/float-little, 
-    PlayerId:10/binary, Start:32/little, Duration:32/little, MobType:32/little>>) ->
-    Mob = build_mobilization(FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType),
+    PlayerId:10/binary, Start:32/little, Duration:32/little, Rest/binary>>) ->
+    Mob = build_mobilization(FromX, FromY, ToX, ToY, PlayerId, Start, Duration, Rest),
     FromKey = make_key_for(mobilization, FromX, FromY),
     ToKey = make_key_for(mobilization, ToX, ToY),
 
@@ -255,12 +255,11 @@ build_battle_cmd(BattleId, X, Z, Command) ->
     Coord = binary_coord(X, Z),
     <<?RESPONSE_TYPE_BATTLE_CMD:32/little-signed, BattleId:10/binary, Coord/binary, Command/binary >>.
 
-build_mobilization(FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType) ->
-    io:format("FromX = ~p, FromY = ~p, ToX = ~p, ToY = ~p, PlayerId = ~p, Start = ~p, Duration = ~p, MobType = ~p~n", [FromX, FromY, ToX, ToY, PlayerId, Start, Duration, MobType]),
+build_mobilization(FromX, FromY, ToX, ToY, PlayerId, Start, Duration, Rest) ->
     From = binary_coord(FromX, FromY),
     To   = binary_coord(ToX, ToY),
     PaddedPlayerId = pad_player_id(PlayerId),
-    <<?RESPONSE_TYPE_MOBILIZE:32/little-signed, From/binary, To/binary, PaddedPlayerId/binary, Start:32/little, Duration:32/little, MobType:32/little>>.
+    <<?RESPONSE_TYPE_MOBILIZE:32/little-signed, From/binary, To/binary, PaddedPlayerId/binary, Start:32/little, Duration:32/little, Rest/binary>>.
 
 binary_coord(X, Z) when is_float(X), is_float(Z) ->
     << X:64/float-little, Z:64/float-little>>.
@@ -268,8 +267,6 @@ binary_coord(X, Z) when is_float(X), is_float(Z) ->
 pad_player_id(PlayerId) ->
     list_to_binary(string:left(binary_to_list(PlayerId), 10, 32)).
 
-explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Z:64/float-little,  ?TILE_TYPE_LAND:32/little>>) ->
-    {?RESPONSE_TYPE_TILE, ?TILE_TYPE_LAND, X, Z};
 explode_tile(<<?RESPONSE_TYPE_TILE:32/little-signed, X:64/float-little, Z:64/float-little, Username:10/binary, ?TILE_TYPE_BASE:32/little, BaseId:32/little>>) ->
     {?RESPONSE_TYPE_TILE, ?TILE_TYPE_BASE, X, Z, binary_to_list(Username), BaseId};
 explode_tile(_Other) ->
